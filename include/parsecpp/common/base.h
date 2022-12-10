@@ -8,7 +8,7 @@ namespace prs {
 
 template <typename T>
 auto pure(T t) noexcept {
-    return Parser<T>::make([t](Stream& s) {
+    return Parser<T>::make([t](Stream&) {
         return Parser<T>::data(t);
     });
 }

@@ -1,9 +1,12 @@
 #pragma once
 
+#include <parsecpp/core/stream.h>
+
 #include <functional>
 #include <memory>
 
 #include <string>
+
 
 namespace prs {
 
@@ -16,9 +19,24 @@ struct Unit {
     }
 };
 
+struct Drop {
+    Drop() noexcept = default;
+
+    bool operator==(Drop const&) const noexcept {
+        return true;
+    }
+};
+
 
 template <typename Parser>
 using parser_result_t = typename Parser::Type;
+
+
+template <typename Parser>
+constexpr bool is_parser_v = std::is_invocable_v<Parser, Stream&>;
+
+template<typename T>
+concept IsParser = is_parser_v<T>;
 
 namespace details {
 
@@ -56,7 +74,7 @@ template <typename T>
 struct MakeClass {
     template <class ...Args>
     auto operator()(Args &&...args) const noexcept {
-        return T(args...);
+        return T{args...};
     }
 };
 

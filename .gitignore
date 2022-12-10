@@ -32,4 +32,8 @@
 *.app
 
 # cmake build
-./cmake-build-*
+cmake-build-*/
+
+
+# Clion
+.idea/

@@ -101,3 +101,26 @@ static void BM_ETALON_EmptyOp(benchmark::State& state) {
 }
 
 BENCHMARK(BM_ETALON_EmptyOp);
+
+static constexpr std::string_view TYPE_ERASING_OP_TEST = "testtest test";
+static void BM_TypeErasing(benchmark::State& state) {
+    auto parser = letters().toCommonType();
+    for (auto _ : state) {
+        Stream s(TYPE_ERASING_OP_TEST);
+        auto data = parser(s);
+        benchmark::DoNotOptimize(data.data().size());
+    }
+}
+
+BENCHMARK(BM_TypeErasing);
+
+static void BM_ETALON_TypeErasing(benchmark::State& state) {
+    auto parser = letters();
+    for (auto _ : state) {
+        Stream s(TYPE_ERASING_OP_TEST);
+        auto data = parser(s);
+        benchmark::DoNotOptimize(data.data().size());
+    }
+}
+
+BENCHMARK(BM_ETALON_TypeErasing);

@@ -88,8 +88,8 @@ public:
     auto join(OnSuccess onSuccess, OnError onError) const&
                     noexcept(map_nothrow<OnSuccess, OnError>) {
 
-        using Result = std::common_type_t<std::invoke_result_t<OnSuccess, const T&>,
-                    std::invoke_result_t<OnError, const Error&>>;
+//        using Result = std::common_type_t<std::invoke_result_t<OnSuccess, const T&>,
+//                    std::invoke_result_t<OnError, const Error&>>;
 
         return isError() ? onError(m_error) : onSuccess(m_data);
     }
@@ -99,8 +99,8 @@ public:
     auto join(OnSuccess onSuccess, OnError onError) &&
                     noexcept(map_nothrow<OnSuccess, OnError>) {
 
-        using Result = std::common_type_t<std::invoke_result_t<OnSuccess, const T&>,
-                    std::invoke_result_t<OnError, const Error&>>;
+//        using Result = std::common_type_t<std::invoke_result_t<OnSuccess, const T&>,
+//                    std::invoke_result_t<OnError, const Error&>>;
 
         return isError() ? onError(std::move(m_error)) : onSuccess(std::move(m_data));
     }

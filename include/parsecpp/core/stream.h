@@ -1,11 +1,12 @@
 #pragma once
 
-#include "parsingError.h"
+#include <parsecpp/core/parsingError.h>
 
 #include <string_view>
 #include <string>
 #include <utility>
 #include <sstream>
+#include <cassert>
 
 
 namespace prs {

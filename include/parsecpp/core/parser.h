@@ -110,7 +110,7 @@ public:
 
 
     template <typename A>
-    using MaybeValue = std::conditional_t<std::is_same_v<A, Unit>, A, std::optional<A>>;
+    using MaybeValue = std::conditional_t<std::is_same_v<A, Drop>, A, std::optional<A>>;
 
     auto maybe() const noexcept {
         return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream) {

@@ -2,6 +2,7 @@
 
 #include <parsecpp/core/parser.h>
 #include <parsecpp/core/lift.h>
+#include <parsecpp/utils/funcHelper.h>
 
 namespace prs {
 
@@ -114,6 +115,18 @@ auto between(char borderLeft, char borderRight) noexcept {
 template <typename StringType = std::string_view>
 auto between(char border) noexcept {
     return between<StringType>(border, border);
+}
+
+
+template <IsParser Parser>
+auto between(char borderLeft, char borderRight, Parser parser) noexcept {
+    return charIn(borderLeft) >> parser << charIn(borderRight);
+}
+
+
+template <IsParser Parser>
+auto between(char border, Parser parser) noexcept {
+    return between(border, border, std::move(parser));
 }
 
 template <typename StringType = std::string_view>
