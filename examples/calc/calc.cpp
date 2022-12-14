@@ -100,7 +100,7 @@ private:
 struct MakeExpr {
     Expr::ptr operator()(
             Expr::ptr const& spLhs,
-            std::optional<std::tuple<Expr::Op, Expr::ptr>> const& maybeRhs) noexcept {
+            std::optional<std::tuple<Expr::Op, Expr::ptr>> const& maybeRhs) const noexcept {
         if (!maybeRhs) {
             return spLhs;
         } else {
@@ -108,7 +108,7 @@ struct MakeExpr {
         }
     }
 
-    Expr::ptr operator()(double n) noexcept {
+    Expr::ptr operator()(double n) const noexcept {
         return Expr::make(n);
     }
 };
@@ -171,7 +171,7 @@ int main() {
 
     getline(std::cin, strExpr);
     Stream stream{strExpr};
-    return parser(stream).join([](Expr::ptr const& spExpr) {
+    return parser(stream).join([&stream](Expr::ptr const& spExpr) {
         std::cout << "Expr: " << spExpr->toString() << " = " << spExpr->exec() << std::endl;
         return 0;
     }, [&](details::ParsingError const& error) {

@@ -55,3 +55,24 @@ TEST(Lazy, BracesRec) {
     failed_parsing(parser, 0, "(((]]]");
     failed_parsing(parser, 0, "({)}");
 }
+
+Parser<char> makeBCached();
+
+auto makeACached() {
+    return charIn('A') >> makeBCached();
+}
+struct ATag{};
+Parser<char> makeBCached() {
+    return (charIn('B') | lazyCached<ATag>(makeACached)).toCommonType();
+}
+
+
+TEST(LazyCached, AB) {
+    auto parser = makeACached();
+    success_parsing(parser, 'B', "ABABA", "ABA");
+    success_parsing(parser, 'B', "AAAAAB", "");
+    success_parsing(parser, 'B', "ABBBB", "BBB");
+
+    failed_parsing(parser, 0, "BBBA");
+    failed_parsing(parser, 4, "AAAAC");
+}

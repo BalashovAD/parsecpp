@@ -7,12 +7,12 @@ Based on the paper [Direct Style Monadic Parser Combinators For The Real World](
 - [ ] Installation guide, requirements
 - [ ] Add guide how to write the fastest parsers
 - [ ] Add Drop control class for performance optimizations
-- [ ] Disable error log by flag
+- [x] Disable error log by flag
 - [ ] Add call stack for debug purpose
 
 ## Requirements
 
-It's header only library, require c++20 standard
+It's header only library, require support c++20 standard
 
 ## Examples
 
@@ -80,6 +80,8 @@ auto parser = makeA();
 Stream example("AAAAB");
 parser(example);
 ```
+
+TODO `lazyCached` example
 
 See `examples/calc`, `examples/json`, and unit tests `tests/` for complex examples with recursion
 

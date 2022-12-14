@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
 option(Parsecpp_Valgrind    "Execute test suite with Valgrind." OFF)
-option(Parsecpp_FastTests   "Skip expensive/slow tests." OFF)
 
 enable_testing()
 

@@ -3,6 +3,8 @@ project(parsercpp)
 
 set(CMAKE_CXX_STANDARD 20)
 
+option(Parsecpp_DisableError   "Disable error" OFF)
+
 if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
@@ -15,6 +17,9 @@ set(PARSECPP_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE HEADER_LIST ${PARSECPP_INCLUDE_DIR}/*.h)
 
+if (Parsecpp_DisableError)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPRS_DISABLE_ERROR_LOG")
+endif ()
 
 add_subdirectory(tests)
 add_subdirectory(examples)

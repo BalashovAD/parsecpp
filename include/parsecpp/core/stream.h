@@ -1,6 +1,7 @@
 #pragma once
 
 #include <parsecpp/core/parsingError.h>
+#include <parsecpp/core/buildParams.h>
 
 #include <string_view>
 #include <string>
@@ -71,7 +72,7 @@ public:
 
 
     template<std::predicate<char> Fn>
-    char checkFirst(Fn test) noexcept(std::is_nothrow_invocable_v<Fn, char>) {
+    char checkFirst(Fn const& test) noexcept(std::is_nothrow_invocable_v<Fn, char>) {
         if (eos()) {
             return 0;
         } else {
@@ -112,7 +113,11 @@ public:
 
         std::ostringstream stream;
         stream << "Parse error in pos: " << error.pos;
-        stream << ", dsc: " << error.description;
+        if constexpr (details::DISABLE_ERROR_LOG) {
+            stream << ", dsc: optimized";
+        } else {
+            stream << ", dsc: " << error.description;
+        }
         if constexpr (printAfter + printBefore > 0) {
             auto startPos = error.pos > printBefore ? error.pos - printBefore : 0;
             auto endPos = error.pos + printAfter > m_fullStr.size() ? m_fullStr.size() : error.pos + printAfter;
@@ -128,7 +133,6 @@ private:
         , m_currentStr(full) {
 
     }
-
 
     std::string const m_str;
     std::string_view const m_fullStr;

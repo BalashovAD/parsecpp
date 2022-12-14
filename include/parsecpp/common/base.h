@@ -21,14 +21,14 @@ inline auto success() noexcept {
 
 inline auto fail() noexcept {
     return Parser<Unit>::make([](Stream& s) {
-        return Parser<Unit>::error("Fail", s.pos());
+        return Parser<Unit>::makeError("Fail", s.pos());
     });
 }
 
 
 inline auto fail(std::string text) noexcept {
     return Parser<Unit>::make([text](Stream& s) {
-        return Parser<Unit>::error(text, s.pos());
+        return Parser<Unit>::makeError(text, s.pos());
     });
 }
 

@@ -14,4 +14,30 @@ auto lazy(Fn genParser) noexcept {
     });
 }
 
+
+template <typename tag, typename Fn>
+struct LazyCached {
+    using ParserResult = parser_result_t<std::invoke_result_t<Fn>>;
+
+    explicit LazyCached(Fn generator) noexcept {
+        if (!insideWork) {
+            insideWork = true;
+            cachedParser.emplace(generator());
+        }
+    }
+
+    auto operator()(Stream& stream) const {
+        return (*cachedParser)(stream);
+    }
+
+    inline static bool insideWork = false;
+    inline static std::optional<std::invoke_result_t<Fn>> cachedParser;
+};
+
+template <typename tag, std::invocable Fn>
+auto lazyCached(Fn genParser) noexcept {
+    return make_parser(LazyCached<tag, Fn>{genParser});
+}
+
+
 }

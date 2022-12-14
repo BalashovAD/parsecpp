@@ -14,13 +14,15 @@ auto make_parser(Fn f) noexcept {
 namespace details {
 
 template <typename Fn, typename TupleParser, typename ...Values>
-auto liftRec(Fn fn, TupleParser parsers, Values ...values) noexcept {
+auto liftRec(Fn const& fn, Stream& stream, TupleParser const& parsers, Values &&...values) noexcept {
     constexpr size_t Ind = sizeof...(values);
     if constexpr (std::tuple_size_v<TupleParser> == Ind) {
-        return pure(std::invoke(fn, values...));
+        using ReturnType = std::invoke_result_t<Fn, Values...>;
+        return Parser<ReturnType>::data(std::invoke(fn, values...));
     } else {
-        return std::get<Ind>(parsers).flatMap([&values..., fn, parsers](auto const& a) {
-            return liftRec<Fn, TupleParser, Values..., decltype(a)>(fn, parsers, values..., a);
+        return std::get<Ind>(parsers).apply(stream).flatMap([&](auto &&a) {
+            return liftRec(
+                    fn, stream, parsers, std::forward<Values>(values)..., a);
         });
     }
 }
@@ -29,7 +31,9 @@ auto liftRec(Fn fn, TupleParser parsers, Values ...values) noexcept {
 
 template <typename Fn, typename ...Args>
 auto liftM(Fn fn, Args &&...args) noexcept {
-    return details::liftRec<Fn>(fn, std::make_tuple(std::forward<Args>(args)...));
+    return make_parser([fn, parsers = std::make_tuple(args...)](Stream& s) {
+        return details::liftRec(fn, s, parsers);
+    });
 }
 
 template <typename ...Args>
@@ -43,7 +47,7 @@ auto satisfy(Fn test) noexcept {
         if (auto c = stream.checkFirst(test); c != 0) {
             return Parser<char>::data(c);
         } else {
-            return Parser<char>::error("satisfy", stream.pos());
+            return Parser<char>::PRS_MAKE_ERROR("satisfy", stream.pos());
         }
     });
 }

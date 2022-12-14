@@ -9,7 +9,7 @@ namespace prs {
 inline auto anyChar() noexcept {
     auto p = [](Stream& stream) {
         if (stream.eos()) {
-            return prs::Parser<char>::error("empty string", stream.pos());
+            return prs::Parser<char>::makeError("empty string", stream.pos());
         } else {
             char c = stream.front();
             stream.move();
@@ -51,7 +51,7 @@ auto letters() noexcept {
 
         auto end = str.pos();
         if (!allowEmpty && start == end) {
-            return Parser<StringType>::error("Empty word", str.pos());
+            return Parser<StringType>::makeError("Empty word", str.pos());
         } else {
             return Parser<StringType>::data(StringType{str.get_sv(start, end)});
         }
@@ -72,7 +72,7 @@ auto searchText(std::string const& searchPattern) noexcept {
                 return Parser<Unit>::data({});
             }
         } else {
-            return Parser<Unit>::error("Cannot find '" + std::string(searchPattern) + "'", stream.pos());
+            return Parser<Unit>::PRS_MAKE_ERROR("Cannot find '" + std::string(searchPattern) + "'", stream.pos());
         }
     });
 }
@@ -95,7 +95,7 @@ auto between(char borderLeft, char borderRight) noexcept {
     using P = Parser<StringType>;
     return P::make([borderLeft, borderRight](Stream& stream) {
         if (stream.checkFirst(borderLeft) == 0) {
-            return P::error("No leftBorder", stream.pos());
+            return P::makeError("No leftBorder", stream.pos());
         }
 
         auto start = stream.pos();
@@ -105,7 +105,7 @@ auto between(char borderLeft, char borderRight) noexcept {
 
         auto ans = stream.full().substr(start, stream.pos() - start);
         if (stream.checkFirst(borderRight) == 0) {
-            return P::error("No rightBorder", stream.pos());
+            return P::makeError("No rightBorder", stream.pos());
         }
 
         return P::data(StringType{ans});
@@ -136,7 +136,7 @@ auto literal(std::string str) noexcept {
             s.move(str.size());
             return Parser<StringType>::data(StringType{str});
         } else {
-            return Parser<StringType>::error("Cannot find literal", s.pos());
+            return Parser<StringType>::makeError("Cannot find literal", s.pos());
         }
     }) ;
 }

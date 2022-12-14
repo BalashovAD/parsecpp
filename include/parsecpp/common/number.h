@@ -20,7 +20,7 @@ auto number() noexcept {
             return Parser<Number>::data(n);
         } else {
             // TODO: get error and pos from res
-            return Parser<Number>::error("Cannot parse number", s.pos());
+            return Parser<Number>::makeError("Cannot parse number", s.pos());
         }
     });
 }

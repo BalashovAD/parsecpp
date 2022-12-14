@@ -77,37 +77,28 @@ auto toMap(ParserKey key, ParserValue value, ParserDelimiter delimiter) noexcept
     });
 }
 
-template <typename ParserValue, typename ParserDelimiter>
+template <size_t reserve = 0, typename ParserValue, typename ParserDelimiter>
 auto toArray(ParserValue value, ParserDelimiter delimiter) noexcept {
     using Value = parser_result_t<ParserValue>;
     using P = Parser<std::vector<Value>>;
     return P::make([value, delimiter](Stream& stream) {
         std::vector<Value> ans{};
 
+        ans.reserve(reserve);
+
         auto backup = stream.pos();
 
         const auto emplace = [&](auto const& value) {
+            backup = stream.pos();
             ans.emplace_back(value);
             return Unit{};
         };
 
-        const auto p = [&](auto const& rec, bool needDelimiter) -> void {
-            if (needDelimiter) {
-                (delimiter >> value >>= emplace).apply(stream).map([&](Unit const& _) {
-                    backup = stream.pos();
-                    rec(true);
-                    return _;
-                });
-            } else {
-                (value >>= emplace).apply(stream).map([&](Unit const& _) {
-                    backup = stream.pos();
-                    rec(true);
-                    return _;
-                });
-            }
-        };
+        auto parser = value >>= emplace;
+        for (bool isError = parser.apply(stream).isError();
+                !isError;
+                isError = (delimiter >> parser).apply(stream).isError());
 
-        details::Y{p}(false);
         stream.restorePos(backup);
         return P::data(ans);
     });

@@ -30,12 +30,6 @@ class Parser {
 public:
     static constexpr bool nothrow = std::is_nothrow_invocable_v<Func, Stream&>;
 
-#ifndef DISABLE_ERROR_LOG
-    static constexpr bool DISABLE_ERROR_LOG = false;
-#else
-    static constexpr bool DISABLE_ERROR_LOG = true;
-#endif
-
     using Type = T;
     using Result = details::ResultType<T>;
 
@@ -45,11 +39,12 @@ public:
     }
 
     explicit Parser(Func f) noexcept
-        : m_f(f)
-    {}
+        : m_fn(std::move(f)) {
 
-    Result operator()(Stream& str) const noexcept(nothrow) {
-        return std::invoke(m_f, str);
+    }
+
+    Result operator()(Stream& stream) const noexcept(nothrow) {
+        return std::invoke(m_fn, stream);
     }
 
 
@@ -59,8 +54,8 @@ public:
 
     template <typename B, typename Rhs>
     auto operator>>(Parser<B, Rhs> rhs) const noexcept {
-        return Parser<B>::make([lhs = *this, rhs](Stream& str) noexcept(nothrow && Parser<B, Rhs>::nothrow){
-            return lhs.apply(str).flatMap([rhs, &str](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
+        return Parser<B>::make([lhs = *this, rhs](Stream& str) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
+            return lhs.apply(str).flatMap([&rhs, &str](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
                 return rhs.apply(str);
             });
         });
@@ -69,9 +64,9 @@ public:
     template <typename B, typename Rhs>
     auto operator<<(Parser<B, Rhs> rhs) const noexcept {
         constexpr bool firstCallNoexcept = nothrow && Parser<B, Rhs>::nothrow;
-        return make([lhs = *this, rhs](Stream& str) noexcept(firstCallNoexcept) {
-            return lhs.apply(str).flatMap([rhs, &str](T const& body) noexcept(Parser<Rhs>::nothrow) {
-                return rhs.apply(str).map([&body](auto const& _) {
+        return Parser<T>::make([lhs = *this, rhs](Stream& stream) noexcept(firstCallNoexcept) {
+            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<Rhs>::nothrow) {
+                return rhs.apply(stream).map([&body](auto const& _) {
                     return body;
                 });
             });
@@ -92,17 +87,14 @@ public:
 
     template <typename Rhs>
     auto operator|(Parser<T, Rhs> rhs) const noexcept {
-        return Parser<T>::make([lhs = *this, rhs](Stream& str) {
-            auto backup = str.pos();
-            return lhs.apply(str).flatMapError([&](details::ParsingError const& firstError) {
-                str.restorePos(backup);
-                return rhs.apply(str).flatMapError([&](details::ParsingError const& secondError) {
-                    if constexpr (DISABLE_ERROR_LOG) {
-                        return error(std::max(firstError.pos, secondError.pos));
-                    } else {
-                        return error("Or error: " + firstError.description + ", " + secondError.description
-                                     , std::max(firstError.pos, secondError.pos));
-                    }
+        return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
+            auto backup = stream.pos();
+            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+                stream.restorePos(backup);
+                return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
+                    return PRS_MAKE_ERROR(
+                            "Or error: " + firstError.description + ", " + secondError.description
+                                 , std::max(firstError.pos, secondError.pos));
                 });
             });
         });
@@ -125,10 +117,12 @@ public:
     }
 
 
-    template <bool atLeastOnce = true, typename Vector = std::vector<T>>
+    template <bool atLeastOnce = true, size_t reserve = 0>
     auto repeat(size_t maxIteration = 1000000ull) const noexcept {
+        using Vector = std::vector<T>;
         return Parser<Vector>::make([parser = *this, maxIteration](Stream& stream) {
             Vector out;
+            out.reserve(reserve);
 
             size_t iteration = 0;
             auto backup = stream.pos();
@@ -140,7 +134,9 @@ public:
                 } else {
                     if constexpr (atLeastOnce) {
                         if (out.empty()) {
-                            return Parser<Vector>::error(result.error());
+                            return Parser<Vector>::PRS_MAKE_ERROR(
+                                    "Repeat atLeastOnce: " + result.error().description
+                                    , result.error().pos);
                         }
                     }
                     stream.restorePos(backup);
@@ -148,7 +144,7 @@ public:
                 }
             } while (++iteration != maxIteration);
 
-            return Parser<Vector>::error("Max iteration in repeat", stream.pos());
+            return Parser<Vector>::makeError("Max iteration in repeat", stream.pos());
         });
     }
 
@@ -161,7 +157,7 @@ public:
                if (test(t)) {
                    return Parser<T>::data(t);
                } else {
-                   return Parser<T>::error("Cond failed", stream.pos());
+                   return Parser<T>::makeError("Cond failed", stream.pos());
                }
            });
         });
@@ -174,7 +170,7 @@ public:
                if (test(t, stream)) {
                    return Parser<T>::data(t);
                } else {
-                   return Parser<T>::error("Cond failed", stream.pos());
+                   return Parser<T>::makeError("Cond failed", stream.pos());
                }
            });
         });
@@ -198,35 +194,40 @@ public:
     }
 
     auto toCommonType() const noexcept {
-        details::StdFunction<T> f = [fn = m_f](Stream& str) {
-            return std::invoke(fn, str);
+        details::StdFunction<T> f = [fn = m_fn](Stream& stream) {
+            return std::invoke(fn, stream);
         };
 
         return Parser<T>(f);
     }
 
-    static Result error(details::ParsingError error) noexcept {
+    static Result makeError(details::ParsingError error) noexcept {
         return Result{std::move(error)};
     }
 
-    static Result error(size_t pos) noexcept {
+    static Result makeError(size_t pos) noexcept {
         return Result{details::ParsingError{"", pos}};
     }
 
-    static Result error(std::string desc, size_t pos) noexcept {
-        if constexpr (DISABLE_ERROR_LOG) {
+    static Result makeError(std::string desc, size_t pos) noexcept {
+        if constexpr (details::DISABLE_ERROR_LOG) {
             return Result{details::ParsingError{"", pos}};
         } else {
             return Result{details::ParsingError{std::move(desc), pos}};
         }
     }
 
-
     static Result data(T t) noexcept {
         return Result{t};
     }
+
+    static auto alwaysError() noexcept {
+        return make([](Stream& s) {
+           return makeError("Always error", s.pos());
+        });
+    }
 private:
-    Func m_f;
+    Func m_fn;
 };
 
 }

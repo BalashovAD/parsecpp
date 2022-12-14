@@ -17,11 +17,11 @@ public:
 
     using Variant = std::variant<
             double,
-            std::string,
+            std::string_view,
             bool,
             Null,
             std::vector<Json::ptr>,
-            std::map<std::string, Json::ptr>>;
+            std::map<std::string_view, Json::ptr>>;
 
     struct ToString {
         std::string operator()(Null) const noexcept {
@@ -43,7 +43,7 @@ public:
             return os.str();
         }
 
-        std::string operator()(std::map<std::string, Json::ptr> const& map) const noexcept {
+        std::string operator()(std::map<std::string_view, Json::ptr> const& map) const noexcept {
             std::ostringstream os;
             os << "{";
             bool isFirst = true;
@@ -59,8 +59,8 @@ public:
         }
 
 
-        std::string operator()(std::string const& s) const noexcept {
-            return s;
+        std::string operator()(std::string_view const& s) const noexcept {
+            return std::string(s);
         }
 
         std::string operator()(double t) const noexcept {
@@ -76,7 +76,7 @@ public:
     template <typename T>
     requires (std::is_constructible_v<Variant, T>)
     explicit Json(T const& t) noexcept
-            : m_value(t) {
+        : m_value(t) {
 
     }
 
@@ -95,7 +95,7 @@ PJ parseArray() noexcept;
 
 
 auto parseString() noexcept {
-    return between<std::string>('"') >>= Make{};
+    return between('"') >>= Make{};
 }
 
 auto parseDouble() noexcept {
@@ -109,14 +109,20 @@ auto parseUndefined() noexcept {
 auto parseBool() noexcept {
     return (spaces() >> (literal("false") >> pure(false)) | (literal("true") >> pure(true))) >>= Make{};
 }
-
+struct ObjectTag;
+struct ArrayTag;
 auto parseAny() noexcept {
-    return lazy(parseObject) | lazy(parseArray) | parseString() | parseDouble() | parseUndefined() | parseBool();
+    return lazyCached<ObjectTag>(parseObject)
+            | lazyCached<ArrayTag>(parseArray)
+            | parseString()
+            | parseDouble()
+            | parseUndefined()
+            | parseBool();
 }
 
 PJ parseObject() noexcept {
     auto parserPre = charInSpaces('{');
-    auto parserKey = spaces() >> between<std::string>('"') << charInSpaces(':');
+    auto parserKey = spaces() >> between('"') << charInSpaces(':');
     auto parserDelim = charInSpaces(',');
     auto parserPost = charInSpaces('}');
     return (parserPre >>
@@ -130,8 +136,8 @@ PJ parseArray() noexcept {
     auto parserDelim = charInSpaces(',');
     auto parserPost = charInSpaces(']');
     return (parserPre >>
-                      (toArray(parseAny(), parserDelim) >>= Make{})
-                      << parserPost).toCommonType();
+          (toArray<10>(parseAny(), parserDelim) >>= Make{})
+          << parserPost).toCommonType();
 }
 
 static void BM_json100k(benchmark::State& state) {
@@ -149,8 +155,27 @@ static void BM_json100k(benchmark::State& state) {
     }
 }
 
-
 BENCHMARK(BM_json100k);
+
+
+static void BM_citmCatalog(benchmark::State& state) {
+    auto parser = parseAny();
+    std::ifstream file{"./canada.json"};
+    std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+
+    for (auto _ : state) {
+        Stream s(json);
+        auto data = parser(s);
+        if (data.isError()) {
+            std::cout << "Error: " << s.generateErrorText<10, 5>(data.error()) << std::endl;
+            throw std::runtime_error("Cannot parse json");
+        }
+        benchmark::DoNotOptimize(data.data());
+    }
+}
+
+
+BENCHMARK(BM_citmCatalog);
 
 static void BM_jsonBinance(benchmark::State& state) {
     auto parser = parseAny();
@@ -172,14 +197,14 @@ BENCHMARK(BM_jsonBinance);
 
 
 auto jsonValueDouble(std::string fieldName) noexcept {
-    return searchText("\"" + fieldName + "\":") >> charIn('"') >> number<double>() << charIn('"') << charIn(',');
+    return searchText("\"" + fieldName + "\":") >> charIn('"') >> number<double>() << charIn('"');
 }
 
 auto jsonValueUnsigned(std::string fieldName) noexcept {
-    return searchText("\"" + fieldName + "\":") >> number<size_t>() << charIn(',');
+    return searchText("\"" + fieldName + "\":") >> number<size_t>();
 }
 
-static void BM_jsonBinanceSpecialized(benchmark::State& state) {
+static void BM_jsonSpecializedBinance(benchmark::State& state) {
     struct BinanceTrade {
         size_t id;
         double price;
@@ -194,7 +219,7 @@ static void BM_jsonBinanceSpecialized(benchmark::State& state) {
             jsonValueDouble("qty"),
             jsonValueUnsigned("time"),
             searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
-            ) << searchText("}") << charIn(',').maybe()).repeat<true>() << charIn(']');
+        ) << searchText("}") << charIn(',').maybe()).repeat<true, 500>() << charIn(']');
 
     std::ifstream file{"./binance.json"};
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
@@ -215,4 +240,4 @@ static void BM_jsonBinanceSpecialized(benchmark::State& state) {
 }
 
 
-BENCHMARK(BM_jsonBinanceSpecialized);
+BENCHMARK(BM_jsonSpecializedBinance);
