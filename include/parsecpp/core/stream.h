@@ -15,21 +15,12 @@ namespace prs {
 class Stream {
 public:
     explicit Stream(std::string const& str) noexcept
-        : m_str()
-        , m_fullStr(str)
-        , m_currentStr(str) {
-
-    }
-
-    explicit Stream(std::string &&str) noexcept
-        : m_str(std::move(str))
-        , m_fullStr(m_str)
-        , m_currentStr(m_str) {
+        : Stream{str, str} {
 
     }
 
     explicit Stream(std::string_view str) noexcept
-        : Stream{"", str, str} {
+        : Stream{str, str} {
     }
 
     explicit Stream(char const* str) noexcept
@@ -127,14 +118,12 @@ public:
         return stream.str();
     }
 private:
-    explicit Stream(std::string str, std::string_view cur, std::string_view full) noexcept
-        : m_str(std::move(str))
-        , m_fullStr(cur)
+    Stream(std::string_view cur, std::string_view full) noexcept
+        : m_fullStr(cur)
         , m_currentStr(full) {
 
     }
 
-    std::string const m_str;
     std::string_view const m_fullStr;
     std::string_view m_currentStr;
 };

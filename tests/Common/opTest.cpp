@@ -38,7 +38,9 @@ TEST(Op, MaybeErrorHandling) {
 }
 
 TEST(Op, Repeat) {
-    auto parser = anyChar().repeat<true>(10);
+    auto parser = anyChar().repeat<0, 10>().cond([](auto const& t) {
+        return !t.empty();
+    });
 
     success_parsing(parser, {'4', 't', 'e', 's', 't'}, "4test", "");
     success_parsing(parser, {'4'}, "4", "");

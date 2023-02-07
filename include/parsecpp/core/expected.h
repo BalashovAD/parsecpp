@@ -15,7 +15,11 @@ public:
     using Body = T;
 
     template<typename OnSuccess, typename OnError = details::Id>
-    static constexpr bool map_nothrow = std::is_nothrow_invocable_v<OnSuccess, T>
+    static constexpr bool map_nothrow = std::is_nothrow_invocable_v<OnSuccess, T const&>
+                    && std::is_nothrow_invocable_v<OnError, Error const&>;
+
+    template<typename OnSuccess, typename OnError = details::Id>
+    static constexpr bool map_move_nothrow = std::is_nothrow_invocable_v<OnSuccess, T>
                     && std::is_nothrow_invocable_v<OnError, Error>;
 
     constexpr explicit Expected(T &&t) noexcept
@@ -114,9 +118,9 @@ public:
     }
 
 
-    template<std::invocable<const T&> OnSuccess>
+    template<std::invocable<T> OnSuccess>
     auto map(OnSuccess onSuccess) &&
-                    noexcept(map_nothrow<OnSuccess>) {
+                    noexcept(map_move_nothrow<OnSuccess>) {
 
         using Result = std::invoke_result_t<OnSuccess, const T&>;
         return isError() ? Expected<Result, Error>{std::move(m_error)}
@@ -126,15 +130,15 @@ public:
     template<std::invocable<const T&> OnSuccess, std::invocable<Error const&> OnError>
     auto map(OnSuccess onSuccess, OnError onError) const& noexcept(map_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::invoke_result_t<OnSuccess, T const&>;
         return isError() ? Expected<Result, Error>{onError(m_error)}
                 : Expected<Result, Error>{onSuccess(m_data)};
     }
 
-    template<std::invocable<const T&> OnSuccess, std::invocable<Error const&> OnError>
-    auto map(OnSuccess onSuccess, OnError onError) && noexcept(map_nothrow<OnSuccess>) {
+    template<std::invocable<T> OnSuccess, std::invocable<Error> OnError>
+    auto map(OnSuccess onSuccess, OnError onError) && noexcept(map_move_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::invoke_result_t<OnSuccess, T>;
         return isError() ? Expected<Result, Error>{onError(std::move(m_error))}
                 : Expected<Result, Error>{onSuccess(std::move(m_data))};
     }
@@ -146,7 +150,7 @@ public:
         return isError() ? Result{m_error} : onSuccess(m_data);
     }
 
-    template<std::invocable<T const&> OnSuccess>
+    template<std::invocable<T&&> OnSuccess>
     auto flatMap(OnSuccess onSuccess) && noexcept(map_nothrow<OnSuccess>) {
 
         using Result = std::invoke_result_t<OnSuccess, T>;

@@ -28,7 +28,7 @@ Parser<Unit> braces() noexcept {
                      , std::make_tuple('(', ')')
                      , std::make_tuple('{', '}')
                      , std::make_tuple('[', ']'));
-    }).repeat<false>() >> pure(Unit{})).toCommonType();
+    }).repeat() >> pure(Unit{})).toCommonType();
 }
 
 TEST(Lazy, Braces) {

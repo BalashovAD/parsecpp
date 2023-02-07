@@ -15,10 +15,6 @@ concept printable = requires(T t) {
 
 template <typename T>
 void printError(typename Parser<T>::Result const& result, Stream const& stream) {
-    if (result.isError()) {
-
-    }
-
     result.join([&](T const& t) {
         if constexpr (printable<T>) {
             std::cout << "Error parse: '" << stream.full() << "', r: '" << stream.remaining() << "'"

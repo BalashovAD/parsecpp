@@ -36,7 +36,9 @@ template <typename Parser>
 constexpr bool is_parser_v = std::is_invocable_v<Parser, Stream&>;
 
 template<typename T>
-concept IsParser = is_parser_v<T>;
+concept ParserType = is_parser_v<T>;
+
+static constexpr size_t MAX_ITERATION = 1000000;
 
 namespace details {
 
