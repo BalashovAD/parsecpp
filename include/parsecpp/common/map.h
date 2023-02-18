@@ -9,98 +9,91 @@
 
 namespace prs {
 
-template <template <typename K, typename V> typename MapType = std::map,
-        typename ParserKey,
-        typename ParserValue>
+template <bool errorInTheMiddle = true
+        , size_t maxIteration = MAX_ITERATION
+        , ParserType ParserKey
+        , ParserType ParserValue>
 auto toMap(ParserKey key, ParserValue value) noexcept {
     using Key = parser_result_t<ParserKey>;
     using Value = parser_result_t<ParserValue>;
-    using Map = MapType<Key, Value>;
+    using Map = std::map<Key, Value>;
     using P = Parser<Map>;
     return P::make([key, value](Stream& stream) {
-        Map ans{};
+        Map out{};
+        size_t iteration = 0;
 
+        [[maybe_unused]]
         auto backup = stream.pos();
-        const auto p = [&](auto const& rec) -> void {
-            liftM([&](auto const& key, auto const& value) {
-                return ans.insert_or_assign(key, value).second;
-            }, key, value).apply(stream).map([&](bool wasAdded) {
-                backup = stream.pos();
-                rec();
-                return wasAdded;
-            });
-        };
+        do {
+            auto keyRes = key.apply(stream);
+            if (!keyRes.isError()) {
+                auto valueRes = value.apply(stream);
+                if (!valueRes.isError()) {
+                    out.insert_or_assign(std::move(keyRes).data(), std::move(valueRes).data());
+                } else {
+                    if constexpr (errorInTheMiddle) {
+                        return P::makeError("Parse key but cannot parse value", stream.pos());
+                    } else {
+                        stream.restorePos(backup);
+                        return P::data(std::move(out));
+                    }
+                }
+            } else {
+                stream.restorePos(backup);
+                return P::data(std::move(out));
+            }
 
-        details::Y{p}();
-        stream.restorePos(backup);
-        return P::data(ans);
+            backup = stream.pos();
+        } while (++iteration != maxIteration);
+
+        return P::makeError("Max iteration", stream.pos());
     });
 }
 
 
-template <template <typename K, typename V> typename MapType = std::map,
-        typename ParserKey,
-        typename ParserValue,
-        typename ParserDelimiter>
-auto toMap(ParserKey key, ParserValue value, ParserDelimiter delimiter) noexcept {
+template <bool errorInTheMiddle = true
+        , size_t maxIteration = MAX_ITERATION
+        , ParserType ParserKey
+        , ParserType ParserValue
+        , ParserType ParserDelimiter>
+auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexcept {
     using Key = parser_result_t<ParserKey>;
     using Value = parser_result_t<ParserValue>;
-    using Map = MapType<Key, Value>;
+    using Map = std::map<Key, Value>;
     using P = Parser<Map>;
-    return P::make([key, value, delimiter](Stream& stream) {
-        Map ans{};
+    return P::make([key = std::move(tKey), value = std::move(tValue), delimiter = std::move(tDelimiter)](Stream& stream) {
+        Map out{};
+        size_t iteration = 0;
 
         auto backup = stream.pos();
-        const auto p = [&](auto const& rec, bool needDelimiter) -> void {
-            if (needDelimiter) {
-                (delimiter >> liftM([&](auto const& key, auto const& value) {
-                    return ans.insert_or_assign(key, value).second;
-                }, key, value)).apply(stream).map([&](bool wasAdded) {
-                    backup = stream.pos();
-                    rec(true);
-                    return wasAdded;
-                });
+        do {
+            auto keyRes = key.apply(stream);
+            if (!keyRes.isError()) {
+                auto valueRes = value.apply(stream);
+                if (!valueRes.isError()) {
+                    out.insert_or_assign(std::move(keyRes).data(), std::move(valueRes).data());
+                } else {
+                    if constexpr (errorInTheMiddle) {
+                        return P::makeError("Parse key but cannot parse value", stream.pos());
+                    } else {
+                        stream.restorePos(backup);
+                        return P::data(std::move(out));
+                    }
+                }
             } else {
-                liftM([&](auto const& key, auto const& value) {
-                    return ans.insert_or_assign(key, value).second;
-                }, key, value).apply(stream).map([&](bool wasAdded) {
-                    backup = stream.pos();
-                    rec(true);
-                    return wasAdded;
-                });
+                stream.restorePos(backup);
+                return P::data(std::move(out));
             }
-        };
 
-        details::Y{p}(false);
-        stream.restorePos(backup);
-        return P::data(ans);
-    });
-}
-
-template <size_t reserve = 0, typename ParserValue, typename ParserDelimiter>
-auto toArray(ParserValue value, ParserDelimiter delimiter) noexcept {
-    using Value = parser_result_t<ParserValue>;
-    using P = Parser<std::vector<Value>>;
-    return P::make([value, delimiter](Stream& stream) {
-        std::vector<Value> ans{};
-
-        ans.reserve(reserve);
-
-        auto backup = stream.pos();
-
-        const auto emplace = [&](auto const& value) {
             backup = stream.pos();
-            ans.emplace_back(value);
-            return Unit{};
-        };
+        } while (!delimiter.apply(stream).isError() && ++iteration != maxIteration);
 
-        auto parser = value >>= emplace;
-        for (bool isError = parser.apply(stream).isError();
-                !isError;
-                isError = (delimiter >> parser).apply(stream).isError());
-
-        stream.restorePos(backup);
-        return P::data(ans);
+        if (iteration == maxIteration) {
+            return P::makeError("Max iteration", stream.pos());
+        } else {
+            stream.restorePos(backup);
+            return P::data(std::move(out));
+        }
     });
 }
 

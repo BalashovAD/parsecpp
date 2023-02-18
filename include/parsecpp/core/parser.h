@@ -65,9 +65,9 @@ public:
     auto operator<<(Parser<B, Rhs> rhs) const noexcept {
         constexpr bool firstCallNoexcept = nothrow && Parser<B, Rhs>::nothrow;
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) noexcept(firstCallNoexcept) {
-            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<Rhs>::nothrow) {
-                return rhs.apply(stream).map([&body](auto const& _) {
-                    return body;
+            return lhs.apply(stream).flatMap([&rhs, &stream](T body) noexcept(Parser<Rhs>::nothrow) {
+                return rhs.apply(stream).map([mvBody = std::move(body)](auto const& _) {
+                    return mvBody;
                 });
             });
         });
@@ -107,8 +107,8 @@ public:
     auto maybe() const noexcept {
         return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream) {
             auto backup = stream.pos();
-            return parser.apply(stream).map([](T const& t) {
-                return MaybeValue<T>{t};
+            return parser.apply(stream).map([](T t) {
+                return MaybeValue<T>{std::move(t)};
             }, [&stream, &backup](details::ParsingError const& error) {
                 stream.restorePos(backup);
                 return MaybeValue<T>{};
@@ -117,34 +117,60 @@ public:
     }
 
 
-    template <bool atLeastOnce = true, size_t reserve = 0>
-    auto repeat(size_t maxIteration = 1000000ull) const noexcept {
-        using Vector = std::vector<T>;
-        return Parser<Vector>::make([parser = *this, maxIteration](Stream& stream) {
-            Vector out;
+    template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION>
+    auto repeat() const noexcept {
+        using Value = T;
+        using P = Parser<std::vector<Value>>;
+        return P::make([value = *this](Stream& stream) {
+            std::vector<Value> out{};
             out.reserve(reserve);
 
             size_t iteration = 0;
+
             auto backup = stream.pos();
             do {
-                auto result = parser.apply(stream);
+                backup = stream.pos();
+                auto result = value.apply(stream);
                 if (!result.isError()) {
-                    out.emplace_back(result.data());
-                    backup = stream.pos();
+                    out.emplace_back(std::move(result).data());
                 } else {
-                    if constexpr (atLeastOnce) {
-                        if (out.empty()) {
-                            return Parser<Vector>::PRS_MAKE_ERROR(
-                                    "Repeat atLeastOnce: " + result.error().description
-                                    , result.error().pos);
-                        }
-                    }
                     stream.restorePos(backup);
-                    return Parser<Vector>::data(out);
+                    return P::data(std::move(out));
                 }
             } while (++iteration != maxIteration);
 
-            return Parser<Vector>::makeError("Max iteration in repeat", stream.pos());
+            return P::makeError("Max iteration", stream.pos());
+        });
+    }
+
+    template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
+    auto repeat(Delimiter tDelimiter) const noexcept {
+        using Value = T;
+        using P = Parser<std::vector<Value>>;
+        return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream) {
+            std::vector<Value> out{};
+            out.reserve(reserve);
+
+            size_t iteration = 0;
+
+            auto backup = stream.pos();
+            do {
+                auto result = value.apply(stream);
+                if (!result.isError()) {
+                    out.emplace_back(std::move(result).data());
+                } else {
+                    return P::data(std::move(out));
+                }
+
+                backup = stream.pos();
+            } while (!delimiter.apply(stream).isError() && ++iteration != maxIteration);
+
+            if (iteration == maxIteration) {
+                return P::makeError("Max iteration", stream.pos());
+            } else {
+                stream.restorePos(backup);
+                return P::data(std::move(out));
+            }
         });
     }
 
@@ -153,9 +179,9 @@ public:
     requires (!std::predicate<T const&, Stream&>)
     auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
-           return parser.apply(stream).flatMap([test, &stream](T const& t) {
+           return parser.apply(stream).flatMap([&test, &stream](T t) {
                if (test(t)) {
-                   return Parser<T>::data(t);
+                   return Parser<T>::data(std::move(t));
                } else {
                    return Parser<T>::makeError("Cond failed", stream.pos());
                }
@@ -166,9 +192,9 @@ public:
     template <std::predicate<T const&, Stream&> Fn>
     auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
-           return parser.apply(stream).flatMap([test, &stream](T const& t) {
+           return parser.apply(stream).flatMap([&test, &stream](T t) {
                if (test(t, stream)) {
-                   return Parser<T>::data(t);
+                   return Parser<T>::data(std::move(t));
                } else {
                    return Parser<T>::makeError("Cond failed", stream.pos());
                }
@@ -202,23 +228,25 @@ public:
     }
 
     static Result makeError(details::ParsingError error) noexcept {
-        return Result{std::move(error)};
+        return Result{error};
     }
 
     static Result makeError(size_t pos) noexcept {
         return Result{details::ParsingError{"", pos}};
     }
 
-    static Result makeError(std::string desc, size_t pos) noexcept {
-        if constexpr (details::DISABLE_ERROR_LOG) {
-            return Result{details::ParsingError{"", pos}};
-        } else {
-            return Result{details::ParsingError{std::move(desc), pos}};
-        }
+#ifdef PRS_DISABLE_ERROR_LOG
+    static Result makeError(std::string_view desc, size_t pos) noexcept {
+        return Result{details::ParsingError{.pos = pos}};
     }
+#else
+    static Result makeError(std::string desc, size_t pos) noexcept {
+        return Result{details::ParsingError{std::move(desc), pos}};
+    }
+#endif
 
     static Result data(T t) noexcept {
-        return Result{t};
+        return Result{std::move(t)};
     }
 
     static auto alwaysError() noexcept {

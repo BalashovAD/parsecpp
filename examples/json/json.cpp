@@ -131,7 +131,7 @@ PJ parseArray() noexcept {
     auto parserDelim = charInSpaces(',');
     auto parserPost = charInSpaces(']');
     return (parserPre >>
-         (toArray(parseAny(), parserDelim) >>= Make{})
+         (parseAny().repeat(parserDelim) >>= Make{})
         << parserPost).toCommonType();
 }
 

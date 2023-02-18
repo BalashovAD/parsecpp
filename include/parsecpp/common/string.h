@@ -9,11 +9,11 @@ namespace prs {
 inline auto anyChar() noexcept {
     auto p = [](Stream& stream) {
         if (stream.eos()) {
-            return prs::Parser<char>::makeError("empty string", stream.pos());
+            return Parser<char>::makeError("empty string", stream.pos());
         } else {
             char c = stream.front();
             stream.move();
-            return prs::Parser<char>::data(c);
+            return Parser<char>::data(c);
         }
     };
 
@@ -62,13 +62,13 @@ auto letters() noexcept {
 template <bool forwardSearch = false>
 auto searchText(std::string const& searchPattern) noexcept {
     return Parser<Unit>::make([searchPattern](Stream& stream) {
-        auto str = stream.sv();
+        auto &str = stream.sv();
         if (auto pos = str.find(searchPattern); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
                 stream.move(pos > 0 ? pos - 1 : 0);
                 return Parser<Unit>::data({});
             } else {
-                stream.move(pos + searchPattern.size());
+                str = str.substr(pos + searchPattern.size());
                 return Parser<Unit>::data({});
             }
         } else {
@@ -118,13 +118,13 @@ auto between(char border) noexcept {
 }
 
 
-template <IsParser Parser>
+template <ParserType Parser>
 auto between(char borderLeft, char borderRight, Parser parser) noexcept {
     return charIn(borderLeft) >> parser << charIn(borderRight);
 }
 
 
-template <IsParser Parser>
+template <ParserType Parser>
 auto between(char border, Parser parser) noexcept {
     return between(border, border, std::move(parser));
 }
@@ -138,7 +138,7 @@ auto literal(std::string str) noexcept {
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
         }
-    }) ;
+    });
 }
 
 }

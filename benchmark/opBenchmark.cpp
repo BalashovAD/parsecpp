@@ -7,7 +7,7 @@ using namespace prs;
 static constexpr std::string_view OP_TEST = "  ttt 123 rrr222   ttt4444 o3 q1 eeeeeee                         1234567 y 5";
 
 static void BM_OpSimpleTest(benchmark::State& state) {
-    auto parser = (spaces() >> letters() >> spaces() >> number<unsigned>()).repeat<false, 10>();
+    auto parser = (spaces() >> letters() >> spaces() >> number<unsigned>()).repeat<10>();
     for (auto _ : state) {
         Stream s(OP_TEST);
         auto data = parser(s);
@@ -20,6 +20,7 @@ BENCHMARK(BM_OpSimpleTest);
 static void BM_ETALON_OpSimpleTest(benchmark::State& state) {
     for (auto _ : state) {
         std::vector<unsigned> data;
+        data.reserve(10);
 
         std::string_view s = OP_TEST;
 

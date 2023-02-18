@@ -136,7 +136,7 @@ PJ parseArray() noexcept {
     auto parserDelim = charInSpaces(',');
     auto parserPost = charInSpaces(']');
     return (parserPre >>
-          (toArray<10>(parseAny(), parserDelim) >>= Make{})
+          (parseAny().repeat<10>(parserDelim) >>= Make{})
           << parserPost).toCommonType();
 }
 
@@ -204,6 +204,7 @@ auto jsonValueUnsigned(std::string fieldName) noexcept {
     return searchText("\"" + fieldName + "\":") >> number<size_t>();
 }
 
+
 static void BM_jsonSpecializedBinance(benchmark::State& state) {
     struct BinanceTrade {
         size_t id;
@@ -219,7 +220,45 @@ static void BM_jsonSpecializedBinance(benchmark::State& state) {
             jsonValueDouble("qty"),
             jsonValueUnsigned("time"),
             searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
-        ) << searchText("}") << charIn(',').maybe()).repeat<true, 500>() << charIn(']');
+    ) << searchText("}") << charIn(',').maybe()).repeat<1000>() << charIn(']');
+
+    std::ifstream file{"./binance.json"};
+    std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+
+    for (auto _ : state) {
+        Stream s(json);
+        auto data = parser(s);
+        if (data.isError()) {
+            std::cout << s.generateErrorText(data.error()) << std::endl;
+            throw std::runtime_error("Cannot parse json");
+        } else {
+            if (data.data().size() != 1000) {
+                throw std::runtime_error("Not full parsed: " + std::to_string(data.data().size()));
+            }
+        }
+        benchmark::DoNotOptimize(data.data());
+    }
+}
+
+BENCHMARK(BM_jsonSpecializedBinance);
+
+
+static void BM_jsonSpecializedBinanceTypeErasing(benchmark::State& state) {
+    struct BinanceTrade {
+        size_t id;
+        double price;
+        double qty;
+        size_t time;
+        bool isBuyerMaker;
+    };
+
+    auto parser = (charIn('[') >> (charIn('{') >> liftM(details::MakeClass<BinanceTrade>{},
+            jsonValueUnsigned("id"),
+            jsonValueDouble("price"),
+            jsonValueDouble("qty"),
+            jsonValueUnsigned("time"),
+            searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
+    ) << searchText("}") << charIn(',').maybe()).repeat<1000>() << charIn(']')).toCommonType();
 
     std::ifstream file{"./binance.json"};
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
@@ -240,4 +279,4 @@ static void BM_jsonSpecializedBinance(benchmark::State& state) {
 }
 
 
-BENCHMARK(BM_jsonSpecializedBinance);
+BENCHMARK(BM_jsonSpecializedBinanceTypeErasing);

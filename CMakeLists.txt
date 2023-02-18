@@ -4,6 +4,7 @@ project(parsercpp)
 set(CMAKE_CXX_STANDARD 20)
 
 option(Parsecpp_DisableError   "Disable error" OFF)
+option(Parsecpp_Sanitizer   "Enable sanitizer" OFF)
 
 if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
@@ -19,6 +20,16 @@ file(GLOB_RECURSE HEADER_LIST ${PARSECPP_INCLUDE_DIR}/*.h)
 
 if (Parsecpp_DisableError)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPRS_DISABLE_ERROR_LOG")
+endif ()
+
+if (Parsecpp_Sanitizer)
+    message("Add sanitizer")
+    add_compile_options(-fsanitize=address)
+    add_link_options(-fsanitize=address)
+    add_compile_options(-fsanitize=undefined)
+    add_link_options(-fsanitize=undefined)
+    add_compile_options(-fsanitize=leak)
+    add_link_options(-fsanitize=leak)
 endif ()
 
 add_subdirectory(tests)
