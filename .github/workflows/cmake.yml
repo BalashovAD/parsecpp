@@ -4,14 +4,11 @@ name: CMake
 on: [push, pull_request]
 
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Release
+  JSON_EXAMPLE: {"a": 5.1,"Bb":[ null, "test",{ "r":true}]}
+  CALC_EXAMPLE: 1+2* (3-1 ) - 0.5
 
 jobs:
   build:
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     runs-on: ubuntu-latest
 
     steps:
@@ -20,41 +17,37 @@ jobs:
         submodules: 'true'
 
     - name: Configure CMake Release
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF
 
     - name: Build
-      # Build your program with the given configuration
       run: cmake --build ${{github.workspace}}/build_release --config ${{env.BUILD_TYPE}}
 
     - name: Dir
       working-directory: ${{github.workspace}}/build_release
       run: ls -la && ls -la benchmark
-      
+
     - name: Test
-      working-directory: ${{github.workspace}}/build_release
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ./tests/unit-tests
-      
+      working-directory: ${{github.workspace}}/build_release/tests
+      run: ./unit-tests
+
     - name: Benchmark
-      working-directory: ${{github.workspace}}/build_release
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ./benchmark/benchmarks
-      
+      working-directory: ${{github.workspace}}/build_release/benchmark
+      run: ./benchmarks
+
+    - name: Example calc
+      working-directory: ${{github.workspace}}/build_release/examples
+      run: echo '${{env.CALC_EXAMPLE}}' | ./calc/calc
+
+    - name: Example json
+      working-directory: ${{github.workspace}}/build_release/examples
+      run: echo '${{env.JSON_EXAMPLE}}' | ./json/json
+
     - name: Configure CMake Debug
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF
 
     - name: Build
-      # Build your program with the given configuration
       run: cmake --build ${{github.workspace}}/build_debug --config Debug
 
     - name: Test
-      working-directory: ${{github.workspace}}/build_debug
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ./tests/unit-tests
+      working-directory: ${{github.workspace}}/build_debug/tests
+      run: ./unit-tests
