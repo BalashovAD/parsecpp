@@ -1,0 +1,55 @@
+name: CMake
+
+
+on: push
+
+env:
+  JSON_EXAMPLE: >
+    {"a": 5.1,"Bb":[ null, "test",{ "r":true}]}
+  CALC_EXAMPLE: >
+    1+2* (3-1 ) - 0.5
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'true'
+
+    - name: Configure CMake Release
+      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build_release --config Release
+
+    - name: Dir
+      working-directory: ${{github.workspace}}/build_release
+      run: ls -la && ls -la benchmark
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build_release/tests
+      run: ./unit-tests
+
+    - name: Benchmark
+      working-directory: ${{github.workspace}}/build_release/benchmark
+      run: ./benchmarks
+
+    - name: Example calc
+      working-directory: ${{github.workspace}}/build_release/examples
+      run: echo '${{env.CALC_EXAMPLE}}' | ./calc/calc
+
+    - name: Example json
+      working-directory: ${{github.workspace}}/build_release/examples
+      run: echo '${{env.JSON_EXAMPLE}}' | ./json/json
+
+    - name: Configure CMake Debug
+      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build_debug --config Debug
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build_debug/tests
+      run: ./unit-tests
