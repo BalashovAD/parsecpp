@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(CODE_COVERAGE ON)
 include(CodeCoverage.cmake)
 
 option(Parsecpp_Valgrind    "Execute test suite with Valgrind." OFF)
