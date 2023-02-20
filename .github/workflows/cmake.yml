@@ -1,7 +1,7 @@
 name: CMake
 
 
-on: [push, pull_request]
+on: push
 
 env:
   JSON_EXAMPLE: >
@@ -19,10 +19,10 @@ jobs:
         submodules: 'true'
 
     - name: Configure CMake Release
-      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF
+      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF
 
     - name: Build
-      run: cmake --build ${{github.workspace}}/build_release --config ${{env.BUILD_TYPE}}
+      run: cmake --build ${{github.workspace}}/build_release --config Release
 
     - name: Dir
       working-directory: ${{github.workspace}}/build_release
