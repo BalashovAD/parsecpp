@@ -30,7 +30,7 @@ jobs:
 
     - name: Dir
       working-directory: ${{github.workspace}}/build_release
-      run: ls -la
+      run: ls -la && ls -la benchmark
       
     - name: Test
       working-directory: ${{github.workspace}}/build_release
@@ -38,10 +38,23 @@ jobs:
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ./tests/unit-tests
       
-            
     - name: Benchmark
       working-directory: ${{github.workspace}}/build_release
       # Execute tests defined by the CMake configuration.
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ./benchmark/benchmarks
+      
+    - name: Configure CMake Debug
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF
 
+    - name: Build
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build_debug --config Debug
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build_debug
+      # Execute tests defined by the CMake configuration.
+      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+      run: ./tests/unit-tests
