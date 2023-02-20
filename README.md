@@ -8,7 +8,7 @@ Based on the paper [Direct Style Monadic Parser Combinators For The Real World](
 - [ ] Add guide how to write the fastest parsers
 - [ ] Add Drop control class for performance optimizations
 - [x] Disable error log by flag
-- [ ] Add call stack for debug purpose
+- [x] Add call stack for debug purpose
 
 ## Requirements
 
@@ -167,7 +167,15 @@ endOfStream :: Parser<A> -> Parser<A>
 Full stream must be consumed for Success. 
 
 ```c++
-auto parser = charIn('A', 'B').endOfStream; // Parser<char>
+auto parser = charIn('A', 'B').endOfStream(); // Parser<char>
 // "B" -> B
 // "AB" -> error {Remaining str "B"}
+```
+
+### Debug
+For debug purpose use `parsecpp/common/debug.h`. All debug 
+
+## LogPoint
+Log itself and continue
+```c++
 ```

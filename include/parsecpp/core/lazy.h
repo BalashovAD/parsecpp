@@ -19,8 +19,8 @@ template <typename tag, typename Fn>
 struct LazyCached {
     using ParserResult = parser_result_t<std::invoke_result_t<Fn>>;
 
-    explicit LazyCached(Fn generator) noexcept {
-        if (!insideWork) {
+    explicit LazyCached(Fn const& generator) noexcept {
+        if (!insideWork) { // cannot use optional because generator() invoke ctor before optional::emplace
             insideWork = true;
             cachedParser.emplace(generator());
         }
@@ -34,8 +34,12 @@ struct LazyCached {
     inline static std::optional<std::invoke_result_t<Fn>> cachedParser;
 };
 
-template <typename tag, std::invocable Fn>
-auto lazyCached(Fn genParser) noexcept {
+
+template <auto = details::SourceLocation::current().hash()>
+struct AutoTag{};
+
+template <typename tag = AutoTag<>, std::invocable Fn>
+auto lazyCached(Fn const& genParser) noexcept {
     return make_parser(LazyCached<tag, Fn>{genParser});
 }
 

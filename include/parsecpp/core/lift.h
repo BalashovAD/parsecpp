@@ -7,8 +7,8 @@ namespace prs {
 
 
 template <typename Fn>
-auto make_parser(Fn f) noexcept {
-    return Parser<typename std::invoke_result_t<Fn, Stream&>::Body>::make(f);
+auto make_parser(Fn &&f) noexcept {
+    return Parser<typename std::invoke_result_t<Fn, Stream&>::Body>::make(std::forward<Fn>(f));
 }
 
 namespace details {
@@ -42,8 +42,8 @@ auto concat(Args &&...args) noexcept {
 }
 
 template <typename Fn>
-auto satisfy(Fn test) noexcept {
-    return Parser<char>::make([test](Stream& stream) {
+auto satisfy(Fn&& tTest) noexcept {
+    return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
         if (auto c = stream.checkFirst(test); c != 0) {
             return Parser<char>::data(c);
         } else {
