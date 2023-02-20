@@ -1,6 +1,8 @@
 # Parser Combinators 
 
-Based on the paper [Direct Style Monadic Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf).
+![Build](https://github.com/balashovAD/parsecpp/actions/workflows/cmake.yml/badge.svg)
+
+Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf).
 
 ## TODO List
 - [x] Add quick examples to readme

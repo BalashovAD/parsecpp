@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(CODE_COVERAGE ON)
 include(CodeCoverage.cmake)
-
-option(Parsecpp_Valgrind    "Execute test suite with Valgrind." OFF)
 
 enable_testing()
 
@@ -19,11 +16,12 @@ add_executable(unit-tests ${TEST_SOURCE_LIST} ${HEADER_LIST})
 
 target_link_libraries(unit-tests PRIVATE ${TEST_LIBRARIES})
 
-target_code_coverage(unit-tests EXCLUDE .*Test.cpp testHelper.h unit.cpp)
+if (CODE_COVERAGE)
+        target_code_coverage(unit-tests EXCLUDE .*Test.cpp testHelper.h unit.cpp)
+        target_compile_options(unit-tests PRIVATE -g -O0 --coverage -fprofile-arcs -ftest-coverage)
+endif ()
 
 target_compile_options(unit-tests PRIVATE -Werror -Wall -Wextra -pedantic -Wno-unused-parameter)
-
-target_compile_options(unit-tests PRIVATE -g -O0 --coverage -fprofile-arcs -ftest-coverage)
 
 target_include_directories(unit-tests PRIVATE
         ${PARSECPP_INCLUDE_DIR}

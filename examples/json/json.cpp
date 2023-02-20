@@ -139,7 +139,7 @@ PJ parseArray() noexcept {
 int main() {
     std::string strJson;
 
-    auto parser = parseAny();
+    auto parser = parseAny().endOfStream();
 
     // {"a":"test", "b"  : 33 , "c":[1,2,3,4], "d": null, "eee": {"r":false}}
     getline(std::cin, strJson);

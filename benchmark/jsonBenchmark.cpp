@@ -143,6 +143,9 @@ PJ parseArray() noexcept {
 static void BM_json100k(benchmark::State& state) {
     auto parser = parseAny();
     std::ifstream file{"./100k.json"};
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file");
+    }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
     for (auto _ : state) {
@@ -161,6 +164,9 @@ BENCHMARK(BM_json100k);
 static void BM_citmCatalog(benchmark::State& state) {
     auto parser = parseAny();
     std::ifstream file{"./canada.json"};
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file");
+    }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
     for (auto _ : state) {
@@ -180,6 +186,9 @@ BENCHMARK(BM_citmCatalog);
 static void BM_jsonBinance(benchmark::State& state) {
     auto parser = parseAny();
     std::ifstream file{"./binance.json"};
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file");
+    }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
     for (auto _ : state) {
@@ -223,6 +232,9 @@ static void BM_jsonSpecializedBinance(benchmark::State& state) {
     ) << searchText("}") << charIn(',').maybe()).repeat<1000>() << charIn(']');
 
     std::ifstream file{"./binance.json"};
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file");
+    }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
     for (auto _ : state) {
@@ -261,6 +273,9 @@ static void BM_jsonSpecializedBinanceTypeErasing(benchmark::State& state) {
     ) << searchText("}") << charIn(',').maybe()).repeat<1000>() << charIn(']')).toCommonType();
 
     std::ifstream file{"./binance.json"};
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open file");
+    }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
     for (auto _ : state) {
