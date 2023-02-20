@@ -4,8 +4,10 @@ name: CMake
 on: [push, pull_request]
 
 env:
-  JSON_EXAMPLE: {"a": 5.1,"Bb":[ null, "test",{ "r":true}]}
-  CALC_EXAMPLE: 1+2* (3-1 ) - 0.5
+  JSON_EXAMPLE: >
+    {"a": 5.1,"Bb":[ null, "test",{ "r":true}]}
+  CALC_EXAMPLE: >
+    1+2* (3-1 ) - 0.5
 
 jobs:
   build:
