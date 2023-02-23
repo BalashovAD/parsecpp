@@ -250,7 +250,7 @@ public:
             std::string desc,
             size_t pos,
             details::SourceLocation source = details::SourceLocation::current()) noexcept {
-        return Result{details::ParsingError{{std::move(desc), source}, pos}};
+        return Result{details::ParsingError{std::move(desc), pos}};
     }
 #endif
 

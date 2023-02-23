@@ -111,7 +111,7 @@ public:
         if constexpr (details::DISABLE_ERROR_LOG) {
             stream << ", dsc: optimized";
         } else {
-            stream << ", dsc: " << error.description << ", path: " << error.location.prettyPrint();
+            stream << ", dsc: " << error.description;
         }
         if constexpr (printAfter + printBefore > 0) {
             auto startPos = error.pos > printBefore ? error.pos - printBefore : 0;

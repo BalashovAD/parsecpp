@@ -7,19 +7,8 @@
 
 namespace prs::details {
 
-template <bool disable>
-struct ParsingDebugInfo;
-
-template <>
-struct ParsingDebugInfo<true> {};
-
-template <>
-struct ParsingDebugInfo<false> {
-    std::string description = {};
-    SourceLocation location;
-};
-
-struct ParsingError : ParsingDebugInfo<DISABLE_ERROR_LOG> {
+struct ParsingError {
+    std::string description;
     size_t pos{};
 };
 
