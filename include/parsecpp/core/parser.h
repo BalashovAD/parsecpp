@@ -238,7 +238,7 @@ public:
     }
 
     static Result makeError(size_t pos) noexcept {
-        return Result{details::ParsingError{.pos = pos}};
+        return Result{details::ParsingError{"", pos}};
     }
 
 #ifdef PRS_DISABLE_ERROR_LOG
