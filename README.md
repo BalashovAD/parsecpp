@@ -10,7 +10,7 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 - [ ] Add guide how to write the fastest parsers
 - [ ] Add Drop control class for performance optimizations
 - [x] Disable error log by flag
-- [x] Add call stack for debug purpose
+- [ ] Add call stack for debug purpose
 
 ## Requirements
 
@@ -59,19 +59,19 @@ parser(example);
 
 ### Recursion 
 `Parsecpp` is a top-down parser and doesn't like left recursion. 
-Furthermore, building your combinator parser with direct recursion would make a stack overflow before parsing.  
+Furthermore, building your combinator parser with direct recursion would cause a stack overflow before parsing.  
 Use `lazy(makeParser)`, `lazyCached`, `lazyForget` functions that will end the loop while building. 
-See `benchmark/lazyBenchmark.cpp` for details.
+See `benchmark/lazyBenchmark.cpp` for more details.
 
 
 To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
 See `examples/calc`.
 
 #### Lazy
-The easiest way is use `lazy` function.
+The easiest way is to use the `lazy` function.
 It builds the combinator, but parser generator will be called only while parsing the stream.
 It's slower than building full parser once before start and avoid type erasing.
-But it's universal method that works with any parsers.
+But it's a universal method that works with any parsers.
 
 ```c++
 Parser<char> makeB();
@@ -91,7 +91,7 @@ parser(example);
 
 #### LazyCached
 
-Make one instance of recursive parser in preparing time. It's much faster way to make recursive parsers. 
+Make one instance of recursive parser in preparing time. It's a much faster way to make recursive parsers. 
 But result parser (`Parser'<T>`) must be pure (doesn't have mutable states inside), 
 and allow to be called recursively for one instance. 
 Also, because `LazyCached` type dependence on `Fn` that dependence on `Parser<T>`,
@@ -99,7 +99,7 @@ generator cannot use `decltype(auto)` for return type. So, usually the generator
 
 #### LazyForget
 
-This improved version with type erasing of `lazyCached`. 
+This is an improved version with type erasing of `lazyCached`. 
 `LazyForget` dependence only on parser result type and doesn't make recursive type. 
 You need to specify return type manually with `decltype(X)`, where `X` is value in `return` with changed `lazyForget<R>(f)` to
 `std::declval<Parser<R, LazyForget<R>>>()`.
@@ -109,8 +109,8 @@ This code is slightly faster when `lazyCached`, but code looks harder to read an
 #### Tag in lazy*
 The `Tag` type must be unique for any difference call of `lazyCached` function. 
 For the case when you call `lazyCached` only once per line you can use default parameter(`AutoTag`). 
-If you isn't sure, specialize `Tag` type manually. Be careful with func helpers that cover the auto tag parameter.
-For example the follow code won't work correctly
+If you aren't sure, specialize `Tag` type manually. Be careful with func helpers that cover the auto tag parameter.
+For example the following code won't work correctly
 ```c++
 // Doesn't work properly
 template <typename Fn>
