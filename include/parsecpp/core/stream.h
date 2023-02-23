@@ -41,6 +41,10 @@ public:
         m_currentStr = m_currentStr.substr(std::min(n, m_currentStr.size()));
     }
 
+    void moveUnsafe(size_t n = 1ull) noexcept {
+        m_currentStr.remove_prefix(n);
+    }
+
     std::string_view get_sv(size_t start, size_t end = std::string_view::npos) const noexcept(false) {
         return m_fullStr.substr(start, end - start);
     }
@@ -69,7 +73,7 @@ public:
         } else {
             char c = m_currentStr[0];
             if (test(c)) {
-                move();
+                m_currentStr.remove_prefix(1);
                 return c;
             } else {
                 return 0;
@@ -83,7 +87,7 @@ public:
         } else {
             char c = m_currentStr[0];
             if (test == c) {
-                move();
+                m_currentStr.remove_prefix(1);
                 return c;
             } else {
                 return 0;

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <parsecpp/all.h>
+#include <parsecpp/common/debug.h>
 
 #include <concepts>
 

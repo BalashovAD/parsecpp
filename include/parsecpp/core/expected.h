@@ -10,6 +10,7 @@ namespace prs {
 
 
 template <typename T, typename Error>
+    requires(!std::same_as<std::decay_t<T>, std::decay_t<Error>>)
 class Expected {
 public:
     using Body = T;
@@ -51,7 +52,7 @@ public:
         if (isError()) {
             new (&m_error)T(e.m_error);
         } else {
-            new (&m_data)Error(e.m_error);
+            new (&m_data)Error(e.m_data);
         }
     }
 

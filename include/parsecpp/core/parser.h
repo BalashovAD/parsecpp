@@ -1,15 +1,16 @@
 #pragma once
 
-#include "expected.h"
-#include "parsecpp/utils/funcHelper.h"
-#include "parsingError.h"
-#include "stream.h"
+#include <parsecpp/core/expected.h>
+#include <parsecpp/utils/funcHelper.h>
+#include <parsecpp/core/parsingError.h>
+#include <parsecpp/core/stream.h>
 
 #include <concepts>
 #include <string_view>
 #include <functional>
 #include <utility>
 #include <optional>
+#include <glob.h>
 
 
 namespace prs {
@@ -30,16 +31,21 @@ class Parser {
 public:
     static constexpr bool nothrow = std::is_nothrow_invocable_v<Func, Stream&>;
 
+    using StoredFn = std::decay_t<Func>;
+
     using Type = T;
     using Result = details::ResultType<T>;
 
     template <std::invocable<Stream&> Fn>
-    static auto make(Fn f) noexcept {
-        return Parser<T, Fn>(f);
+    static auto make(Fn &&f) noexcept {
+        return Parser<T, Fn>(std::forward<Fn>(f));
     }
 
-    explicit Parser(Func f) noexcept
-        : m_fn(std::move(f)) {
+
+    template <typename U>
+        requires(std::is_same_v<std::decay_t<U>, StoredFn>)
+    explicit Parser(U&& f) noexcept
+        : m_fn(std::forward<U>(f)) {
 
     }
 
@@ -48,15 +54,15 @@ public:
     }
 
 
-    Result apply(Stream& str) const noexcept(nothrow) {
-        return operator()(str);
+    Result apply(Stream& stream) const noexcept(nothrow) {
+        return operator()(stream);
     }
 
     template <typename B, typename Rhs>
     auto operator>>(Parser<B, Rhs> rhs) const noexcept {
-        return Parser<B>::make([lhs = *this, rhs](Stream& str) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
-            return lhs.apply(str).flatMap([&rhs, &str](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
-                return rhs.apply(str);
+        return Parser<B>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
+            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
+                return rhs.apply(stream);
             });
         });
     }
@@ -237,16 +243,21 @@ public:
 
 #ifdef PRS_DISABLE_ERROR_LOG
     static Result makeError(std::string_view desc, size_t pos) noexcept {
-        return Result{details::ParsingError{.pos = pos}};
+        return Result{details::ParsingError{"", pos}};
     }
 #else
-    static Result makeError(std::string desc, size_t pos) noexcept {
+    static Result makeError(
+            std::string desc,
+            size_t pos,
+            details::SourceLocation source = details::SourceLocation::current()) noexcept {
         return Result{details::ParsingError{std::move(desc), pos}};
     }
 #endif
 
-    static Result data(T t) noexcept {
-        return Result{std::move(t)};
+    template <typename U = T>
+        requires(std::convertible_to<U, T>)
+    static Result data(U&& t) noexcept(std::is_nothrow_convertible_v<U, T>) {
+        return Result{std::forward<U>(t)};
     }
 
     static auto alwaysError() noexcept {
@@ -255,7 +266,7 @@ public:
         });
     }
 private:
-    Func m_fn;
+    StoredFn m_fn;
 };
 
 }

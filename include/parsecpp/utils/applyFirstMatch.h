@@ -10,12 +10,12 @@ class ApplyFirstMatch {
 public:
     explicit constexpr ApplyFirstMatch(UnhandledAction unhandled, Equal eq, TupleArgs &&...args) noexcept
         : m_tuple(std::make_tuple(std::forward<TupleArgs>(args)...))
-        , m_unhandled(unhandled)
-        , m_cmp(eq) {
+        , m_unhandled(std::move(unhandled))
+        , m_cmp(std::move(eq)) {
     }
 
     template <typename KeyLike, typename ...Args>
-    constexpr auto apply(KeyLike const& key, Args &&...args) const {
+    constexpr decltype(auto) apply(KeyLike const& key, Args &&...args) const {
         auto f = [&](const auto& el) -> bool {
             return std::invoke(m_cmp, el, key);
         };
@@ -29,7 +29,7 @@ public:
     }
 private:
     template <typename F, typename ...Args>
-    constexpr auto invoke(F f, Args &&...args) const {
+    constexpr decltype(auto) invoke(F f, Args &&...args) const {
         if constexpr (std::is_invocable_v<F, Args...>) {
             return std::invoke(f, std::forward<Args>(args)...);
         } else {

@@ -58,14 +58,20 @@ parser(example);
 ```
 
 ### Recursion 
-Parsecpp is a top-down parser and doesn't like left recursion. 
-Furthermore, building your combinator parser with direct recursion would make a stack overflow before parsing.  
-Use `lazy(makeParser)` function that will end the loop while building. 
-It builds the combinator, but parser generator will be called only while parsing the stream. 
-It's slower than building full parser once before start and makes to use forward declaration and type erasing.  
+`Parsecpp` is a top-down parser and doesn't like left recursion. 
+Furthermore, building your combinator parser with direct recursion would cause a stack overflow before parsing.  
+Use `lazy(makeParser)`, `lazyCached`, `lazyForget` functions that will end the loop while building. 
+See `benchmark/lazyBenchmark.cpp` for more details.
+
 
 To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
 See `examples/calc`.
+
+#### Lazy
+The easiest way is to use the `lazy` function.
+It builds the combinator, but parser generator will be called only while parsing the stream.
+It's slower than building full parser once before start and avoid type erasing.
+But it's a universal method that works with any parsers.
 
 ```c++
 Parser<char> makeB();
@@ -83,9 +89,84 @@ Stream example("AAAAB");
 parser(example);
 ```
 
-TODO `lazyCached` example
+#### LazyCached
 
-See `examples/calc`, `examples/json`, and unit tests `tests/` for complex examples with recursion
+Make one instance of recursive parser in preparing time. It's a much faster way to make recursive parsers. 
+But result parser (`Parser'<T>`) must be pure (doesn't have mutable states inside), 
+and allow to be called recursively for one instance. 
+Also, because `LazyCached` type dependence on `Fn` that dependence on `Parser<T>`,
+generator cannot use `decltype(auto)` for return type. So, usually the generator should use `toCommonType` for type erasing.
+
+#### LazyForget
+
+This is an improved version with type erasing of `lazyCached`. 
+`LazyForget` dependence only on parser result type and doesn't make recursive type. 
+You need to specify return type manually with `decltype(X)`, where `X` is value in `return` with changed `lazyForget<R>(f)` to
+`std::declval<Parser<R, LazyForget<R>>>()`.
+This code is slightly faster when `lazyCached`, but code looks harder to read and edit. 
+
+
+#### Tag in lazy*
+The `Tag` type must be unique for any difference call of `lazyCached` function. 
+For the case when you call `lazyCached` only once per line you can use default parameter(`AutoTag`). 
+If you aren't sure, specialize `Tag` type manually. Be careful with func helpers that cover the auto tag parameter.
+For example the following code won't work correctly
+```c++
+// Doesn't work properly
+template <typename Fn>
+auto f(Fn f) {
+// use AutoTag with current line, but this code isn't unique for difference f with the same class Fn
+    return lazyCached(f) << spaces(); 
+}
+
+// Correct version
+template <typename Tag = AutoTag<>, typename Fn>
+auto f(Fn f) {
+// use AutoTag line of call f
+    return lazyCached<Tag>(f) << spaces();
+}
+```
+
+```c++
+// Fn ~ std::function<Parser'<T>(void)>
+
+template <typename Tag = AutoTag<>, std::invocable Fn>
+auto lazyCached(Fn const&) noexcept(Fn);
+```
+
+#### Compare lazy* functions
+
+```c++
+Parser<Unit> bracesLazy() noexcept {
+    return (concat(charIn('(', '{', '['), lazy(bracesLazy) >> charIn(')', '}', ']'))
+        .cond(checkBraces).repeat<5>() >> success()).toCommonType();
+}
+
+Parser<Unit> bracesCache() noexcept {
+    return (concat(charIn('(', '{', '['), lazyCached(bracesCache) >> charIn(')', '}', ']'))
+        .cond(checkBraces).repeat<5>() >> success()).toCommonType();
+}
+
+auto bracesForget() noexcept -> decltype((concat(charIn('(', '{', '['), std::declval<Parser<Unit, LazyForget<Unit>>>() >> charIn(')', '}', ']'))
+        .cond(checkBraces).repeat<5>() >> success())) {
+
+    return (concat(charIn('(', '{', '['), lazyForget<Unit>(bracesForget) >> charIn(')', '}', ']'))
+        .cond(checkBraces).repeat<5>() >> success());
+}
+```
+
+Benchmark result:
+```
+BM_bracesSuccess/bracesLazy_median           756 ns
+BM_bracesSuccess/bracesCached_median         439 ns
+BM_bracesSuccess/bracesForget_median         418 ns
+
+BM_bracesFailure/bracesLazyF_median          494 ns
+BM_bracesFailure/bracesCachedF_median        279 ns
+BM_bracesFailure/bracesForgetF_median        270 ns
+```
+
+See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for complex examples with recursion
 
 ## Build-in operators
 
@@ -169,7 +250,15 @@ endOfStream :: Parser<A> -> Parser<A>
 Full stream must be consumed for Success. 
 
 ```c++
-auto parser = charIn('A', 'B').endOfStream; // Parser<char>
+auto parser = charIn('A', 'B').endOfStream(); // Parser<char>
 // "B" -> B
 // "AB" -> error {Remaining str "B"}
+```
+
+### Debug
+For debug purpose use `parsecpp/common/debug.h`. All debug 
+
+## LogPoint
+Log itself and continue
+```c++
 ```
