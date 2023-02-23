@@ -6,9 +6,9 @@
 
 namespace prs::details {
 
+// TODO: Replace to std::source_location
 class SourceLocation
 {
-
     static constexpr size_t hash(char const* str) noexcept {
         size_t hash = 5381;
         char c;
