@@ -243,7 +243,7 @@ public:
 
 #ifdef PRS_DISABLE_ERROR_LOG
     static Result makeError(std::string_view desc, size_t pos) noexcept {
-        return Result{details::ParsingError{.pos = pos}};
+        return Result{details::ParsingError{"", pos}};
     }
 #else
     static Result makeError(
