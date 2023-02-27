@@ -58,6 +58,36 @@ auto letters() noexcept {
     });
 }
 
+class FromRange {
+public:
+    FromRange(char begin, char end) noexcept
+        : m_begin(begin)
+        , m_end(end) {
+
+    }
+
+    friend bool operator==(FromRange const& range, char c) noexcept {
+        return range.m_begin <= c && c <= range.m_end;
+    }
+private:
+    char m_begin;
+    char m_end;
+};
+
+template <typename StringType = std::string_view, typename ...Args>
+auto lettersFrom(Args ...args) noexcept {
+    static_assert(sizeof...(args) > 0);
+    return make_parser([args...](Stream& str) {
+        auto start = str.pos();
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        auto end = str.pos();
+        return Parser<StringType>::data(StringType{str.get_sv(start, end)});
+    });
+}
+
 
 template <bool forwardSearch = false>
 auto searchText(std::string const& searchPattern) noexcept {
@@ -121,6 +151,47 @@ auto between(char border) noexcept {
 template <ParserType Parser>
 auto between(char borderLeft, char borderRight, Parser parser) noexcept {
     return charIn(borderLeft) >> parser << charIn(borderRight);
+}
+
+
+template <typename StringType = std::string_view, std::predicate<char> Fn>
+auto until(Fn fn) noexcept {
+    return Parser<StringType>::make([fn](Stream& stream) {
+        auto start = stream.pos();
+        while (stream.checkFirst([&](char c) {
+            return !fn(c);
+        }));
+
+        auto end = stream.pos();
+        return Parser<StringType>::data(StringType{stream.get_sv(start, end)});
+    });
+}
+
+template <typename StringType = std::string_view, std::predicate<char, Stream&> Fn>
+auto until(Fn fn) noexcept {
+    return Parser<StringType>::make([fn](Stream& stream) {
+        auto start = stream.pos();
+        while (stream.checkFirst([&](char c) {
+            return !fn(c, stream);
+        }));
+
+        auto end = stream.pos();
+        return Parser<StringType>::data(StringType{stream.get_sv(start, end)});
+    });
+}
+
+
+template <typename StringType = std::string_view, typename ...Args>
+auto until(Args ...args) noexcept {
+    return Parser<StringType>::make([args...](Stream& stream) {
+        auto start = stream.pos();
+        while (stream.checkFirst([&](char c) {
+            return !((args == c) || ...);
+        }));
+
+        auto end = stream.pos();
+        return Parser<StringType>::data(StringType{stream.get_sv(start, end)});
+    });
 }
 
 

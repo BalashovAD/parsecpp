@@ -7,9 +7,10 @@ namespace prs {
 
 
 template <typename T>
-auto pure(T t) noexcept {
-    return Parser<T>::make([t](Stream&) {
-        return Parser<T>::data(t);
+auto pure(T tValue) noexcept {
+    using Value = std::decay_t<T>;
+    return Parser<Value>::make([t = std::move(tValue)](Stream&) {
+        return Parser<Value>::data(t);
     });
 }
 
@@ -26,7 +27,7 @@ inline auto fail() noexcept {
 }
 
 
-inline auto fail(std::string text) noexcept {
+inline auto fail(std::string const& text) noexcept {
     return Parser<Unit>::make([text](Stream& s) {
         return Parser<Unit>::makeError(text, s.pos());
     });

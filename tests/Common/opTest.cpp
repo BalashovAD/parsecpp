@@ -49,6 +49,16 @@ TEST(Op, Repeat) {
     failed_parsing(parser, 10, "xxxxxxxxxxxxxxxxxxxxxxx");
 }
 
+TEST(Op, RepeatDrop) {
+    auto parser = anyChar().drop().repeat<10>();
+
+    success_parsing(parser, {}, "4test", "");
+    success_parsing(parser, {}, "4", "");
+    success_parsing(parser, {}, "");
+
+    failed_parsing(parser, 10, "xxxxxxxxxxxxxxxxxxxxxxx");
+}
+
 TEST(Op, Or) {
     auto parser = (number<unsigned>() >>= details::ToString{}) | letters<false, true, std::string>();
 
