@@ -108,13 +108,17 @@ public:
 
 
     template <typename A>
-    using MaybeValue = std::conditional_t<std::is_same_v<A, Drop>, A, std::optional<A>>;
+    using MaybeValue = std::conditional_t<std::is_same_v<A, Drop>, Drop, std::optional<A>>;
 
     auto maybe() const noexcept {
         return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream) {
             auto backup = stream.pos();
             return parser.apply(stream).map([](T t) {
-                return MaybeValue<T>{std::move(t)};
+                if constexpr (std::is_same_v<T, Drop>) {
+                    return Drop{};
+                } else {
+                    return MaybeValue<T>{std::move(t)};
+                }
             }, [&stream, &backup](details::ParsingError const& error) {
                 stream.restorePos(backup);
                 return MaybeValue<T>{};
@@ -124,6 +128,7 @@ public:
 
 
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION>
+            requires(!std::is_same_v<T, Drop>)
     auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>>;
@@ -149,11 +154,35 @@ public:
         });
     }
 
+    template <size_t maxIteration = MAX_ITERATION>
+            requires(std::is_same_v<T, Drop>)
+    auto repeat() const noexcept {
+        using P = Parser<Drop>;
+        return P::make([value = *this](Stream& stream) noexcept(nothrow) {
+            size_t iteration = 0;
+
+            auto backup = stream.pos();
+            do {
+                backup = stream.pos();
+                auto result = value.apply(stream);
+                if (result.isError()) {
+                    stream.restorePos(backup);
+                    return P::data({});
+                }
+            } while (++iteration != maxIteration);
+
+            return P::makeError("Max iteration", stream.pos());
+        });
+    }
+
+
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
+            requires(!std::is_same_v<T, Drop>)
     auto repeat(Delimiter tDelimiter) const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>>;
-        return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream) {
+        constexpr bool noexceptP = nothrow && Delimiter::nothrow;
+        return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream) noexcept(noexceptP) {
             std::vector<Value> out{};
             out.reserve(reserve);
 
@@ -181,8 +210,35 @@ public:
     }
 
 
+    template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
+            requires(std::is_same_v<T, Drop>)
+    auto repeat(Delimiter tDelimiter) const noexcept {
+        using P = Parser<Drop>;
+        return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream) {
+            size_t iteration = 0;
+
+            auto backup = stream.pos();
+            do {
+                auto result = value.apply(stream);
+                if (result.isError()) {
+                    return P::data(Drop{});
+                }
+
+                backup = stream.pos();
+            } while (!delimiter.apply(stream).isError() && ++iteration != maxIteration);
+
+            if (iteration == maxIteration) {
+                return P::makeError("Max iteration", stream.pos());
+            } else {
+                stream.restorePos(backup);
+                return P::data(Drop{});
+            }
+        });
+    }
+
+
     template <std::predicate<T const&> Fn>
-    requires (!std::predicate<T const&, Stream&>)
+            requires (!std::predicate<T const&, Stream&>)
     auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
            return parser.apply(stream).flatMap([&test, &stream](T t) {
@@ -208,6 +264,13 @@ public:
         });
     }
 
+    auto drop() const noexcept {
+        return Parser<Drop>::make([p = *this](Stream& s) {
+            return p.apply(s).map([](auto &&) {
+                return Drop{};
+            });
+        });
+    }
 
     auto endOfStream() const noexcept {
         return cond([](T const& t, Stream& s) {

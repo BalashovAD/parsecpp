@@ -61,7 +61,7 @@ public:
 
 
         std::string operator()(std::string const& s) const noexcept {
-            return s;
+            return "\"" + s + "\"";
         }
 
         std::string operator()(double t) const noexcept {

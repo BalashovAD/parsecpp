@@ -1,6 +1,9 @@
 #include <benchmark/benchmark.h>
 
 #include <parsecpp/all.h>
+#include <regex>
+#include <iostream>
+
 
 using namespace prs;
 
@@ -53,6 +56,37 @@ static void BM_ETALON_OpSimpleTest(benchmark::State& state) {
 }
 
 BENCHMARK(BM_ETALON_OpSimpleTest);
+
+
+static void BM_OpSimpleTestRegex(benchmark::State& state) {
+    std::regex regex(R"#([a-zA-Z]+\s*(\d+))#");
+    for (auto _ : state) {
+        std::vector<unsigned> data;
+        std::string_view s{OP_TEST};
+        std::cmatch match;
+        while (std::regex_search(s.begin(), s.end(), match, regex)) {
+            if (match.size() >= 2) {
+                unsigned ans;
+                auto *end = match[1].second;
+                if (std::from_chars(match[1].first, end, ans).ec == std::errc{}) {
+                    data.emplace_back(ans);
+                } else {
+                    throw std::runtime_error("from_chars");
+                }
+            } else {
+                throw std::runtime_error("match");
+            }
+            s.remove_prefix(match.position() + match.length());
+        }
+
+        if (data.size() != 7) {
+            throw std::runtime_error("data size");
+        }
+        benchmark::DoNotOptimize(data.size());
+    }
+}
+
+BENCHMARK(BM_OpSimpleTestRegex);
 
 static constexpr std::string_view EMPTY_OP_TEST = "bigwordbigwordbigwordbigword";
 static void BM_EmptyOp(benchmark::State& state) {
