@@ -121,10 +121,10 @@ auto parseAny() noexcept {
 }
 
 PJ parseObject() noexcept {
-    auto parserPre = charInSpaces('{');
-    auto parserKey = spaces() >> between('"') << charInSpaces(':');
-    auto parserDelim = charInSpaces(',');
-    auto parserPost = charInSpaces('}');
+    auto parserPre = charFromSpaces('{');
+    auto parserKey = spaces() >> between('"') << charFromSpaces(':');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces('}');
     return (parserPre >>
                       (toMap(parserKey, parseAny(), parserDelim) >>= Make{})
                       << parserPost).toCommonType();
@@ -132,9 +132,9 @@ PJ parseObject() noexcept {
 
 
 PJ parseArray() noexcept {
-    auto parserPre = charInSpaces('[');
-    auto parserDelim = charInSpaces(',');
-    auto parserPost = charInSpaces(']');
+    auto parserPre = charFromSpaces('[');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces(']');
     return (parserPre >>
           (parseAny().repeat<10>(parserDelim) >>= Make{})
           << parserPost).toCommonType();
@@ -206,7 +206,7 @@ BENCHMARK(BM_jsonBinance);
 
 
 auto jsonValueDouble(std::string fieldName) noexcept {
-    return searchText("\"" + fieldName + "\":") >> charIn('"') >> number<double>() << charIn('"');
+    return searchText("\"" + fieldName + "\":") >> charFrom('"') >> number<double>() << charFrom('"');
 }
 
 auto jsonValueUnsigned(std::string fieldName) noexcept {
@@ -223,13 +223,13 @@ static void BM_jsonSpecializedBinance(benchmark::State& state) {
         bool isBuyerMaker;
     };
 
-    auto parser = charIn('[') >> (charIn('{') >> liftM(details::MakeClass<BinanceTrade>{},
+    auto parser = charFrom('[') >> (charFrom('{') >> liftM(details::MakeClass<BinanceTrade>{},
             jsonValueUnsigned("id"),
             jsonValueDouble("price"),
             jsonValueDouble("qty"),
             jsonValueUnsigned("time"),
             searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
-    ) << searchText("}") << charIn(',').maybe()).repeat<1000>() << charIn(']');
+    ) << searchText("}") << charFrom(',').maybe()).repeat<1000>() << charFrom(']');
 
     std::ifstream file{"./binance.json"};
     if (!file.is_open()) {
@@ -264,13 +264,13 @@ static void BM_jsonSpecializedBinanceTypeErasing(benchmark::State& state) {
         bool isBuyerMaker;
     };
 
-    auto parser = (charIn('[') >> (charIn('{') >> liftM(details::MakeClass<BinanceTrade>{},
+    auto parser = (charFrom('[') >> (charFrom('{') >> liftM(details::MakeClass<BinanceTrade>{},
             jsonValueUnsigned("id"),
             jsonValueDouble("price"),
             jsonValueDouble("qty"),
             jsonValueUnsigned("time"),
             searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
-    ) << searchText("}") << charIn(',').maybe()).repeat<1000>() << charIn(']')).toCommonType();
+    ) << searchText("}") << charFrom(',').maybe()).repeat<1000>() << charFrom(']')).toCommonType();
 
     std::ifstream file{"./binance.json"};
     if (!file.is_open()) {

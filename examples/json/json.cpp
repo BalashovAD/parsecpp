@@ -116,10 +116,10 @@ auto parseAny() noexcept {
 }
 
 PJ parseObject() noexcept {
-    auto parserPre = charInSpaces('{');
-    auto parserKey = spaces() >> between<std::string>('"') << charInSpaces(':');
-    auto parserDelim = charInSpaces(',');
-    auto parserPost = charInSpaces('}');
+    auto parserPre = charFromSpaces('{');
+    auto parserKey = spaces() >> between<std::string>('"') << charFromSpaces(':');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces('}');
     return (parserPre >>
             (toMap(parserKey, parseAny(), parserDelim) >>= Make{})
         << parserPost).toCommonType();
@@ -127,9 +127,9 @@ PJ parseObject() noexcept {
 
 
 PJ parseArray() noexcept {
-    auto parserPre = charInSpaces('[');
-    auto parserDelim = charInSpaces(',');
-    auto parserPost = charInSpaces(']');
+    auto parserPre = charFromSpaces('[');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces(']');
     return (parserPre >>
          (parseAny().repeat(parserDelim) >>= Make{})
         << parserPost).toCommonType();

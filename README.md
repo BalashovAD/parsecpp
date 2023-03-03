@@ -47,7 +47,7 @@ public:
 
 // Parser<Point>
 auto pointParser = between('(', ')',
-           liftM(details::MakeClass<Point>{}, number<int>(), charIn(';') >> number<int>()));
+           liftM(details::MakeClass<Point>{}, number<int>(), charFrom(';') >> number<int>()));
 
 // Parser<Circle>
 auto parser = literal("Circle") >> spaces() >>
@@ -77,11 +77,11 @@ However, it's a universal method that works with any parsers.
 Parser<char> makeB();
 
 auto makeA() {
-    return charIn('A') >> makeB();
+    return charFrom('A') >> makeB();
 }
 
 Parser<char> makeB() {
-    return (charIn('B') | lazy(makeA)).toCommonType();
+    return (charFrom('B') | lazy(makeA)).toCommonType();
 }
 
 auto parser = makeA();
@@ -138,19 +138,19 @@ auto lazyCached(Fn const&) noexcept(Fn);
 
 ```c++
 Parser<Unit> bracesLazy() noexcept {
-    return (concat(charIn('(', '{', '['), lazy(bracesLazy) >> charIn(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazy(bracesLazy) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success()).toCommonType();
 }
 
 Parser<Unit> bracesCache() noexcept {
-    return (concat(charIn('(', '{', '['), lazyCached(bracesCache) >> charIn(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success()).toCommonType();
 }
 
-auto bracesForget() noexcept -> decltype((concat(charIn('(', '{', '['), std::declval<Parser<Unit, LazyForget<Unit>>>() >> charIn(')', '}', ']'))
+auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success())) {
 
-    return (concat(charIn('(', '{', '['), lazyForget<Unit>(bracesForget) >> charIn(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success());
 }
 ```
@@ -197,7 +197,7 @@ Sequencing operators, such as the semicolon, compose two actions and discard any
 ```c++
 auto parser = literal("P-") >> number<unsigned>(); // Parser<unsigned>
 // "P-4" -> 4
-auto between = charIn('*') >> letters() << charIn('*'); // Parser<std::string_view> 
+auto between = charFrom('*') >> letters() << charFrom('*'); // Parser<std::string_view> 
 // "*test*" -> test
 ```
 
@@ -208,7 +208,7 @@ auto between = charIn('*') >> letters() << charIn('*'); // Parser<std::string_vi
 Opposite to Haskell Parsec library, the or operator is always `LL(inf)`. Now library doesn't support `LL(1)`.  
 Try to parse using the first parser, if that fails, rollback position and try with the second one.
 ```c++
-auto parser = charIn('A') | charIn('B'); // Parser<char>
+auto parser = charFrom('A') | charFrom('B'); // Parser<char>
 // "B" -> B
 // "A" -> A
 
@@ -223,7 +223,7 @@ repeat :: Parser<A> -> Parser<Vector<A>>
 Be careful with parsers that can parse successfully without consuming the stream.
 
 ```c++
-auto parser = charIn('A', 'B', 'C').repeat(); // Parser<std::vector<char>>
+auto parser = charFrom('A', 'B', 'C').repeat(); // Parser<std::vector<char>>
 // "ABABCDAB" -> {'A', 'B', 'A', 'B', 'C'}
 // "DDD" -> error {Need at least one element in answer}
 
@@ -238,7 +238,7 @@ maybe :: Parser<A> -> Parser<std::optional<A>>
 This parser always returns Success. Rollback stream if it cannot parse `A`.
 
 ```c++
-auto parser = charIn('A').maybe(); // Parser<std::optional<char>>
+auto parser = charFrom('A').maybe(); // Parser<std::optional<char>>
 // "B" -> std::nullopt
 ```
 
@@ -251,7 +251,7 @@ endOfStream :: Parser<A> -> Parser<A>
 This parser requires that the entire stream be consumed for Success.
 
 ```c++
-auto parser = charIn('A', 'B').endOfStream(); // Parser<char>
+auto parser = charFrom('A', 'B').endOfStream(); // Parser<char>
 // "B" -> B
 // "AB" -> error {Remaining str "B"}
 ```
@@ -281,7 +281,7 @@ auto parser = searchText("test").drop().maybe(); // Parser<Drop>
 ```
 
 ```c++
-auto parser = charIn('a', 'b', 'c').drop().repeat(); // Parser<Drop>
+auto parser = charFrom('a', 'b', 'c').drop().repeat(); // Parser<Drop>
 // "aacbatest" -> Drop{} # "test"
 // this code doesn't need to allocate memory for std::vector and works much faster
 ```

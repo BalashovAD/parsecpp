@@ -1,8 +1,8 @@
 #include "../testHelper.h"
 
 TEST(Map, KeyValue) {
-    auto key = letters<false, false, std::string>() << spaces() << charIn('=') << spaces();
-    auto value = number<int>() << spaces() << charIn(';') << spaces();
+    auto key = letters<false, false, std::string>() << spaces() << charFrom('=') << spaces();
+    auto value = number<int>() << spaces() << charFrom(';') << spaces();
     auto parser = toMap(key, value).endOfStream();
 
     std::map<std::string, int> ans{{"test", 1}, {"p", -3}};
@@ -15,8 +15,8 @@ TEST(Map, KeyValue) {
 }
 
 TEST(Map, KeyValueRestoreInTheMiddle) {
-    auto key = letters<false, false, std::string>() << charIn('=');
-    auto value = number<int>() << charIn(';');
+    auto key = letters<false, false, std::string>() << charFrom('=');
+    auto value = number<int>() << charFrom(';');
 
     auto parser = toMap<false>(key, value);
     std::map<std::string, int> ans{{"test", 1}};
@@ -27,9 +27,9 @@ TEST(Map, KeyValueRestoreInTheMiddle) {
 }
 
 TEST(Map, KeyValueDelimRestoreInTheMiddle) {
-    auto key = letters<false, false, std::string>() << charIn('=');
+    auto key = letters<false, false, std::string>() << charFrom('=');
     auto value = number<int>();
-    auto delimiter = charIn(';');
+    auto delimiter = charFrom(';');
 
     auto parser = toMap<false>(key, value, delimiter);
     std::map<std::string, int> ans{{"test", 1}};
@@ -40,9 +40,9 @@ TEST(Map, KeyValueDelimRestoreInTheMiddle) {
 }
 
 TEST(Map, KeyValueDelimRestoreLastDelimiter) {
-    auto key = letters<false, false, std::string>() << charIn('=');
+    auto key = letters<false, false, std::string>() << charFrom('=');
     auto value = number<int>();
-    auto delimiter = charIn(';');
+    auto delimiter = charFrom(';');
 
     auto parser = toMap<false>(key, value, delimiter);
     std::map<std::string, int> ans{{"test", 1}};
@@ -51,9 +51,9 @@ TEST(Map, KeyValueDelimRestoreLastDelimiter) {
 
 
 TEST(Map, KeyValueDelim) {
-    auto key = letters<false, false, std::string>() << spaces() << charIn('=') << spaces();
+    auto key = letters<false, false, std::string>() << spaces() << charFrom('=') << spaces();
     auto value = spaces() >> number<int>() << spaces();
-    auto delimiter = spaces() >> charIn(',') << spaces();
+    auto delimiter = spaces() >> charFrom(',') << spaces();
     auto parser = toMap(key, value, delimiter).endOfStream();
 
     std::map<std::string, int> ans{{"test", 1}, {"p", -3}};
@@ -66,9 +66,9 @@ TEST(Map, KeyValueDelim) {
 }
 
 TEST(Map, KeyValueDelimNotErrorInTheMiddle) {
-    auto key = letters<false, false, std::string>() << spaces() << charIn('=') << spaces();
+    auto key = letters<false, false, std::string>() << spaces() << charFrom('=') << spaces();
     auto value = spaces() >> number<int>() << spaces();
-    auto delimiter = spaces() >> charIn(',') << spaces();
+    auto delimiter = spaces() >> charFrom(',') << spaces();
     auto parser = toMap<false>(key, value, delimiter);
 
     std::map<std::string, int> ans{{"test", 1}, {"p", -3}};
@@ -76,7 +76,7 @@ TEST(Map, KeyValueDelimNotErrorInTheMiddle) {
 }
 
 TEST(Map, KeyValueMaxIter) {
-    auto key = (letters() << charIn('=')).maybe();
+    auto key = (letters() << charFrom('=')).maybe();
     auto value = letters().maybe();
     auto parser = toMap(key, value).endOfStream();
 

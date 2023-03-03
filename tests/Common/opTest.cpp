@@ -32,7 +32,7 @@ TEST(Op, Maybe) {
 }
 
 TEST(Op, MaybeErrorHandling) {
-    auto parser = (charIn('1') >> charIn('2')).maybe() >> charIn('1');
+    auto parser = (charFrom('1') >> charFrom('2')).maybe() >> charFrom('1');
 
     success_parsing(parser, '1', "13", "3");
 }
@@ -87,7 +87,7 @@ TEST(Op, Concat) {
 TEST(Op, LiftM) {
     auto parser = liftM([](unsigned n, char c) {
         return std::to_string(n) + c;
-    }, number<unsigned>(), spaces() >> charIn('a', 'b'));
+    }, number<unsigned>(), spaces() >> charFrom('a', 'b'));
 
     success_parsing(parser, "4b", "4    btest444", "test444");
 
