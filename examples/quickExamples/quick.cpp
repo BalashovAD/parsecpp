@@ -34,7 +34,7 @@ public:
 
 void circle() {
     auto pointParser = between('(', ')',
-               liftM(details::MakeClass<Point>{}, number<int>(), charIn(';') >> number<int>()));
+               liftM(details::MakeClass<Point>{}, number<int>(), charFrom(';') >> number<int>()));
     auto parser = literal("Circle") >> spaces() >>
             liftM(details::MakeClass<Circle>{}, pointParser, spaces() >> number<double>());
 
@@ -50,11 +50,11 @@ void circle() {
 Parser<char> makeB();
 
 auto makeA() {
-    return charIn('A') >> makeB();
+    return charFrom('A') >> makeB();
 }
 
 Parser<char> makeB() {
-    return (charIn('B') | lazy(makeA)).toCommonType();
+    return (charFrom('B') | lazy(makeA)).toCommonType();
 }
 
 void recursion() {

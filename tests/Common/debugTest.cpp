@@ -2,7 +2,7 @@
 
 TEST(Debug, LogPoint) {
     debug::DebugEnvironment env;
-    auto parser = number<unsigned>() << debug::logPoint(env, "test") << charIn('a');
+    auto parser = number<unsigned>() << debug::logPoint(env, "test") << charFrom('a');
     Stream stream{"12345a"};
     EXPECT_FALSE(parser(stream).isError());
     std::cout << env.print(stream) << std::endl;

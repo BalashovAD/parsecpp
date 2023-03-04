@@ -4,11 +4,11 @@
 Parser<char> makeB();
 
 auto makeA() {
-    return charIn('A') >> makeB();
+    return charFrom('A') >> makeB();
 }
 
 Parser<char> makeB() {
-    return (charIn('B') | lazy(makeA)).toCommonType();
+    return (charFrom('B') | lazy(makeA)).toCommonType();
 }
 
 TEST(Lazy, ABA) {
@@ -22,7 +22,7 @@ TEST(Lazy, ABA) {
 }
 
 Parser<Unit> braces() noexcept {
-    return (concat(charIn('(', '{', '['), lazy(braces).maybe() >> charIn(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazy(braces).maybe() >> charFrom(')', '}', ']'))
         .cond([](std::tuple<char, char> const& cc) {
             return details::cmpAnyOf(cc
                      , std::make_tuple('(', ')')
@@ -45,7 +45,7 @@ TEST(Lazy, Braces) {
 }
 
 Parser<Unit> bracesCached() noexcept {
-    return (concat(charIn('(', '{', '['), lazyCached(bracesCached).maybe() >> charIn(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCached).maybe() >> charFrom(')', '}', ']'))
         .cond([](std::tuple<char, char> const& cc) {
             return details::cmpAnyOf(cc
                      , std::make_tuple('(', ')')
@@ -84,12 +84,12 @@ struct ATag;
 auto makeBCached() -> Parser<char>;
 
 auto makeACached() {
-    return charIn('A') >> makeBCached();
+    return charFrom('A') >> makeBCached();
 }
 
 
 Parser<char> makeBCached() {
-    return (charIn('B') | lazyCached(makeACached)).toCommonType();
+    return (charFrom('B') | lazyCached(makeACached)).toCommonType();
 }
 
 
@@ -104,8 +104,8 @@ TEST(LazyCached, AB) {
 }
 
 
-auto f() noexcept -> decltype((charIn('a') >> std::declval<Parser<Unit, LazyForget<Unit>>>() >> charIn('b')).maybe() >> success()) {
-    return (charIn('a') >> lazyForget<Unit>(f) >> charIn('b')).maybe() >> success();
+auto f() noexcept -> decltype((charFrom('a') >> std::declval<Parser<Unit, LazyForget<Unit>>>() >> charFrom('b')).maybe() >> success()) {
+    return (charFrom('a') >> lazyForget<Unit>(f) >> charFrom('b')).maybe() >> success();
 }
 
 TEST(LazyForget, rec) {

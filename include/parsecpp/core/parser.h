@@ -127,6 +127,17 @@ public:
     }
 
 
+    auto maybeOr(T const& defaultValue) const noexcept {
+        return Parser<T>::make([parser = *this, defaultValue](Stream& stream) {
+            auto backup = stream.pos();
+            return parser.apply(stream).flatMapError([&stream, &backup, &defaultValue](details::ParsingError const& error) {
+                stream.restorePos(backup);
+                return data(defaultValue);
+            });
+        });
+    }
+
+
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION>
             requires(!std::is_same_v<T, Drop>)
     auto repeat() const noexcept {
@@ -275,6 +286,19 @@ public:
     auto endOfStream() const noexcept {
         return cond([](T const& t, Stream& s) {
             return s.eos();
+        });
+    }
+
+    auto mustConsume() const noexcept {
+        return make([p = *this](Stream& s) {
+            auto pos = s.pos();
+            return p.apply(s).flatMap([pos, &s](auto &&t) {
+               if (s.pos() > pos) {
+                   return data(t);
+               } else {
+                   return makeError("Didn't consume stream", s.pos());
+               }
+            });
         });
     }
 

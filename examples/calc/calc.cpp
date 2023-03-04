@@ -136,8 +136,8 @@ ParserExpr makeE() noexcept;
 
 Parser<Expr::ptr> makeF() noexcept {
     return ((number<double>() >>= MakeExpr{}) |
-           (spaces() >> charIn('(') >> spaces()) >>
-           lazy(makeE) << (spaces() << charIn(')') << spaces())).toCommonType();
+           (spaces() >> charFrom('(') >> spaces()) >>
+           lazy(makeE) << (spaces() << charFrom(')') << spaces())).toCommonType();
 }
 
 

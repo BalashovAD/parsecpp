@@ -74,7 +74,14 @@ private:
     char m_end;
 };
 
-template <typename StringType = std::string_view, typename ...Args>
+
+template <typename T, typename U>
+concept LeftCmpWith = requires(const std::remove_reference_t<T>& t,
+        const std::remove_reference_t<U>& u) {
+    {t == u} -> std::convertible_to<bool>; // boolean-testable
+};
+
+template <typename StringType = std::string_view, LeftCmpWith<char> ...Args>
 auto lettersFrom(Args ...args) noexcept {
     static_assert(sizeof...(args) > 0);
     return make_parser([args...](Stream& str) {
@@ -107,17 +114,17 @@ auto searchText(std::string const& searchPattern) noexcept {
     });
 }
 
-template <std::same_as<char> ...Args>
-auto charIn(Args ...chars) noexcept {
+template <LeftCmpWith<char> ...Args>
+auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
         return details::cmpAnyOf(c, chars...);
     });
 }
 
 
-template <std::same_as<char> ...Args>
-auto charInSpaces(Args ...chars) noexcept {
-    return spaces() >> charIn(std::forward<Args>(chars)...) << spaces();
+template <LeftCmpWith<char> ...Args>
+auto charFromSpaces(Args ...chars) noexcept {
+    return spaces() >> charFrom(std::forward<Args>(chars)...) << spaces();
 }
 
 template <typename StringType = std::string_view>
@@ -150,7 +157,7 @@ auto between(char border) noexcept {
 
 template <ParserType Parser>
 auto between(char borderLeft, char borderRight, Parser parser) noexcept {
-    return charIn(borderLeft) >> parser << charIn(borderRight);
+    return charFrom(borderLeft) >> parser << charFrom(borderRight);
 }
 
 
@@ -209,6 +216,22 @@ auto literal(std::string str) noexcept {
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
         }
+    });
+}
+
+
+template <ParserType P>
+auto search(P tParser) noexcept {
+    return P::make([parser = std::move(tParser)](Stream& stream) {
+        while (!stream.eos()) {
+            if (decltype(auto) result = parser.apply(stream); !result.isError()) {
+                return P::data(std::move(result).data());
+            } else {
+                stream.moveUnsafe();
+            }
+        }
+
+        return P::makeError("Cannot find", stream.pos());
     });
 }
 
