@@ -1,6 +1,6 @@
 #include <benchmark/benchmark.h>
 
-#include <parsecpp/all.h>
+#include <parsecpp/all.hpp>
 
 #include <fstream>
 #include <variant>
