@@ -1,8 +1,14 @@
 #include <parsecpp/full.hpp>
 
-#include <iostream>
-#include <memory>
-#include <iomanip>
+#include <iomanip>            // for operator<<, setprecision
+#include <iostream>           // for operator<<, basic_ostream, ostringstream
+#include <memory>             // for __shared_ptr_access, make_shared, share...
+#include <optional>           // for optional
+#include <string>             // for operator<<, char_traits, getline, string
+#include <string_view>        // for basic_string_view, operator""sv, operat...
+#include <tuple>              // for get, tuple
+#include <type_traits>        // for __strip_reference_wrapper<>::__type
+#include <utility>            // for make_pair
 
 
 using namespace prs;
