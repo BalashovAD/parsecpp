@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 option(Parsecpp_DisableError   "Disable error" OFF)
 option(Parsecpp_Sanitizer   "Enable sanitizer" OFF)
+option(Parsecpp_SingleInclude   "Use single include file" OFF)
 
 if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
@@ -14,7 +15,14 @@ if(CCACHE_FOUND)
     endif()
 endif(CCACHE_FOUND)
 
-set(PARSECPP_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+if (Parsecpp_SingleInclude)
+    message("Use single_include")
+    set(PARSECPP_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/single_include)
+else()
+    message("Use include")
+    set(PARSECPP_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
+endif()
+
 
 file(GLOB_RECURSE HEADER_LIST ${PARSECPP_INCLUDE_DIR}/*.h)
 

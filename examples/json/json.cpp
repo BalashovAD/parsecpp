@@ -1,5 +1,4 @@
-#include <parsecpp/all.h>
-#include <parsecpp/utils/applyFirstMatch.h>
+#include <parsecpp/full.hpp>
 
 #include <iostream>
 #include <memory>
