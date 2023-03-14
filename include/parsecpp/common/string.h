@@ -12,7 +12,7 @@ inline auto anyChar() noexcept {
             return Parser<char>::makeError("empty string", stream.pos());
         } else {
             char c = stream.front();
-            stream.move();
+            stream.moveUnsafe();
             return Parser<char>::data(c);
         }
     };
@@ -223,14 +223,17 @@ auto literal(std::string str) noexcept {
 template <ParserType P>
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream) {
+        auto start = stream.pos();
+        auto searchPos = start;
         while (!stream.eos()) {
             if (decltype(auto) result = parser.apply(stream); !result.isError()) {
                 return P::data(std::move(result).data());
             } else {
-                stream.moveUnsafe();
+                stream.restorePos(++searchPos);
             }
         }
 
+        stream.restorePos(start);
         return P::makeError("Cannot find", stream.pos());
     });
 }

@@ -34,26 +34,30 @@ template <typename Parser>
 void success_parsing(Parser parser,
         parser_result_t<Parser> const& answer,
         std::string const& str,
-        std::string_view remaining = "") {
+        std::string_view remaining = "",
+        details::SourceLocation sourceLocation = details::SourceLocation::current()) {
     Stream s{str};
     auto result = parser.apply(s);
 
     if (result.isError()) {
         printError<typename Parser::Type>(result, s);
     }
-    ASSERT_FALSE(result.isError());
-    EXPECT_EQ(result.data(), answer);
-    EXPECT_EQ(s.remaining(), remaining);
+    ASSERT_FALSE(result.isError()) << "Test: " << sourceLocation.prettyPrint();
+    EXPECT_EQ(result.data(), answer) << "Test: " << sourceLocation.prettyPrint();
+    EXPECT_EQ(s.remaining(), remaining) << "Test: " << sourceLocation.prettyPrint();
 }
 
 template <typename Parser>
-void failed_parsing(Parser parser, size_t pos, std::string_view str) {
+void failed_parsing(Parser parser,
+                    size_t pos,
+                    std::string_view str,
+                    details::SourceLocation sourceLocation = details::SourceLocation::current()) {
     Stream s{str};
     auto result = parser.apply(s);
 
     if (!result.isError()) {
         printError<typename Parser::Type>(result, s);
     }
-    ASSERT_TRUE(result.isError());
-    EXPECT_EQ(result.error().pos, pos);
+    ASSERT_TRUE(result.isError()) << "Test: " << sourceLocation.prettyPrint();
+    EXPECT_EQ(result.error().pos, pos) << "Test: " << sourceLocation.prettyPrint();
 }
