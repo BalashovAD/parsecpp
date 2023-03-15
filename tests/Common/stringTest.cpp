@@ -126,3 +126,36 @@ HEX code with letters only: #FAFAFA;
 
 Works without a # in front of the code: FFF000;.)", ".");
 }
+
+TEST(String, searchRollback) {
+    auto parser = search(literal("aaa") >> literal("bbb"));
+    success_parsing(parser, "bbb", "aaaabbb");
+    failed_parsing(parser, 0, "aaaaaa");
+    failed_parsing(parser, 0, "aaacbbb");
+}
+
+TEST(String, searchRollback2) {
+    auto parser = search(literal("aaa")).repeat().mustConsume();
+    success_parsing(parser, {"aaa"}, "aaaabbb", "abbb");
+    success_parsing(parser, {"aaa", "aaa"}, "aaaaaa");
+    success_parsing(parser, {"aaa", "aaa"}, "aaacaaadaa", "daa");
+    failed_parsing(parser, 0, "aa");
+}
+
+TEST(String, searchRollback3) {
+    auto parser = search(literal("aaa")).maybe() >> literal("bbb");
+    success_parsing(parser, {"bbb"}, "aaabbb", "");
+    success_parsing(parser, {"bbb"}, "bbb", "");
+
+    failed_parsing(parser, 0, "aabbb");
+    failed_parsing(parser, 3, "aaaabbb");
+    failed_parsing(parser, 4, "baaabb");
+}
+
+TEST(String, searchAlwaysPossessive) {
+    // this search always failed, because `repeat` take 'b'
+    auto parser = search(charFrom('a', 'b').repeat() >> literal("bc"));
+    failed_parsing(parser, 0, "abababc");
+    failed_parsing(parser, 0, "abc");
+    failed_parsing(parser, 0, "bc");
+}
