@@ -60,7 +60,7 @@ TEST(Op, RepeatDrop) {
 }
 
 TEST(Op, Or) {
-    auto parser = (number<unsigned>() >>= details::ToString{}) | letters<false, true, std::string>();
+    auto parser = (number<unsigned>() >>= details::ToString{}) | letters<true, std::string>();
 
     success_parsing(parser, "4", "4test", "test");
     success_parsing(parser, "test", "test", "");

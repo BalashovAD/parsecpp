@@ -629,6 +629,9 @@ public:
         return operator()(stream);
     }
 
+    /**
+     * @def `>>` :: Parser<A> -> Parser<B> -> Parser<B>
+     */
     template <typename B, typename Rhs>
     auto operator>>(Parser<B, Rhs> rhs) const noexcept {
         return Parser<B>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
@@ -638,6 +641,10 @@ public:
         });
     }
 
+
+    /**
+     * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
+     */
     template <typename B, typename Rhs>
     auto operator<<(Parser<B, Rhs> rhs) const noexcept {
         constexpr bool firstCallNoexcept = nothrow && Parser<B, Rhs>::nothrow;
@@ -653,6 +660,7 @@ public:
 
     /*
      * <$>, fmap operator
+     * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
     template <std::invocable<T> ListFn>
     friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
@@ -662,6 +670,9 @@ public:
     }
 
 
+    /**
+     * @def `|` :: Parser<A> -> Parser<A> -> Parser<A>
+     */
     template <typename Rhs>
     auto operator|(Parser<T, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
@@ -681,6 +692,10 @@ public:
     template <typename A>
     using MaybeValue = std::conditional_t<std::is_same_v<A, Drop>, Drop, std::optional<A>>;
 
+
+    /**
+     * @def maybe :: Parser<A> -> Parser<std::optional<B>>
+     */
     auto maybe() const noexcept {
         return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream) {
             auto backup = stream.pos();
@@ -698,6 +713,9 @@ public:
     }
 
 
+    /**
+     * @def maybeOr :: Parser<A> -> Parser<A>
+     */
     auto maybeOr(T const& defaultValue) const noexcept {
         return Parser<T>::make([parser = *this, defaultValue](Stream& stream) {
             auto backup = stream.pos();
@@ -709,6 +727,9 @@ public:
     }
 
 
+    /**
+     * @def repeat :: Parser<A> -> Parser<std::vector<A>>
+     */
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION>
             requires(!std::is_same_v<T, Drop>)
     auto repeat() const noexcept {
@@ -736,6 +757,9 @@ public:
         });
     }
 
+    /**
+     * @def repeat :: Parser<Drop> -> Parser<Drop>
+     */
     template <size_t maxIteration = MAX_ITERATION>
             requires(std::is_same_v<T, Drop>)
     auto repeat() const noexcept {
@@ -758,6 +782,9 @@ public:
     }
 
 
+    /**
+     * @def repeat :: Parser<A> -> Parser<Delim> -> Parser<std::vector<A>>
+     */
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(!std::is_same_v<T, Drop>)
     auto repeat(Delimiter tDelimiter) const noexcept {
@@ -792,6 +819,9 @@ public:
     }
 
 
+    /**
+     * @def repeat :: Parser<Drop> -> Parser<Delim> -> Parser<Drop>
+     */
     template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(std::is_same_v<T, Drop>)
     auto repeat(Delimiter tDelimiter) const noexcept {
@@ -819,6 +849,9 @@ public:
     }
 
 
+    /**
+     * @def cond :: Parser<A> -> Parser<A>
+     */
     template <std::predicate<T const&> Fn>
             requires (!std::predicate<T const&, Stream&>)
     auto cond(Fn test) const noexcept {
@@ -833,6 +866,9 @@ public:
         });
     }
 
+    /**
+     * @def cond :: Parser<A> -> Parser<A>
+     */
     template <std::predicate<T const&, Stream&> Fn>
     auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
@@ -846,6 +882,9 @@ public:
         });
     }
 
+    /**
+     * @def Drop :: Parser<A> -> Parser<Drop>
+     */
     auto drop() const noexcept {
         return Parser<Drop>::make([p = *this](Stream& s) {
             return p.apply(s).map([](auto &&) {
@@ -854,12 +893,18 @@ public:
         });
     }
 
+    /**
+     * @def endOfStream :: Parser<A> -> Parser<A>
+     */
     auto endOfStream() const noexcept {
         return cond([](T const& t, Stream& s) {
             return s.eos();
         });
     }
 
+    /**
+     * @def mustConsume :: Parser<A> -> Parser<A>
+     */
     auto mustConsume() const noexcept {
         return make([p = *this](Stream& s) {
             auto pos = s.pos();
@@ -883,6 +928,9 @@ public:
         });
     }
 
+    /**
+     * @def toCommonType :: Parser<A, Fn> -> Parser'<A>
+     */
     auto toCommonType() const noexcept {
         details::StdFunction<T> f = [fn = m_fn](Stream& stream) {
             return std::invoke(fn, stream);
@@ -1046,7 +1094,10 @@ bool cmpAnyOf(T const& t, First &&f, Args &&...args) noexcept {
 
 namespace prs {
 
-
+/**
+ *
+ * @return Parser<T>
+ */
 template <typename T>
 auto pure(T tValue) noexcept {
     using Value = std::decay_t<T>;
@@ -1055,19 +1106,28 @@ auto pure(T tValue) noexcept {
     });
 }
 
-
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto success() noexcept {
     return pure(Unit{});
 }
 
-
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto fail() noexcept {
     return Parser<Unit>::make([](Stream& s) {
         return Parser<Unit>::makeError("Fail", s.pos());
     });
 }
 
-
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto fail(std::string const& text) noexcept {
     return Parser<Unit>::make([text](Stream& s) {
         return Parser<Unit>::makeError(text, s.pos());
@@ -1140,6 +1200,10 @@ auto satisfy(Fn&& tTest) noexcept {
 
 namespace prs {
 
+
+/**
+ * @return Parser<Number>
+ */
 template <typename Number = double>
     requires (std::is_arithmetic_v<Number>)
 auto number() noexcept {
@@ -1170,6 +1234,10 @@ auto number() noexcept {
 
 namespace prs {
 
+/**
+ *
+ * @return Parser<char>
+ */
 inline auto anyChar() noexcept {
     auto p = [](Stream& stream) {
         if (stream.eos()) {
@@ -1184,6 +1252,10 @@ inline auto anyChar() noexcept {
     return prs::make_parser(p);
 }
 
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto spaces() noexcept {
     return make_parser([](Stream& str) {
         while (str.checkFirst([](char c) {
@@ -1195,6 +1267,10 @@ inline auto spaces() noexcept {
 }
 
 
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto spacesFast() noexcept {
     return make_parser([](Stream& str) {
         while (str.checkFirst([](char c) {
@@ -1205,7 +1281,12 @@ inline auto spacesFast() noexcept {
     });
 }
 
-template <bool allowEmpty = true, bool allowDigit = false, typename StringType = std::string_view>
+
+/**
+ *
+ * @return Parser<StringType>
+ */
+template <bool allowDigit = false, typename StringType = std::string_view>
 auto letters() noexcept {
     return make_parser([](Stream& str) {
         auto start = str.pos();
@@ -1214,7 +1295,7 @@ auto letters() noexcept {
         }));
 
         auto end = str.pos();
-        if (!allowEmpty && start == end) {
+        if (start == end) {
             return Parser<StringType>::makeError("Empty word", str.pos());
         } else {
             return Parser<StringType>::data(StringType{str.get_sv(start, end)});
@@ -1417,6 +1498,12 @@ auto search(P tParser) noexcept {
 
 namespace prs {
 
+/**
+ * @tparam errorInTheMiddle - fail parser if key can be parsed and value cannot
+ * Key := ParserKey::Type
+ * Value := ParserValue::Type
+ * @return Parser<std::map<Key, Value>>
+ */
 template <bool errorInTheMiddle = true
         , size_t maxIteration = MAX_ITERATION
         , ParserType ParserKey
@@ -1459,6 +1546,12 @@ auto toMap(ParserKey key, ParserValue value) noexcept {
 }
 
 
+/**
+ * @tparam errorInTheMiddle - fail parser if key or delim can be parsed and value(key) cannot
+ * Key := ParserKey::Type
+ * Value := ParserValue::Type
+ * @return Parser<std::map<Key, Value>>
+ */
 template <bool errorInTheMiddle = true
         , size_t maxIteration = MAX_ITERATION
         , ParserType ParserKey
@@ -1516,9 +1609,33 @@ auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexc
 
 namespace prs::details {
 
+namespace impl {
+
+template<typename T>
+struct strip_reference_wrapper {
+    using type = T;
+};
+
+template <typename T>
+struct strip_reference_wrapper<std::reference_wrapper<T>> {
+    using type = T&;
+};
+
+}
+
+template <typename T>
+using strip_reference_wrapper_t = typename impl::strip_reference_wrapper<T>::type;
+
 template <typename UnhandledAction, typename Equal, typename ...TupleArgs>
 class ApplyFirstMatch {
 public:
+    using UnhandledType = UnhandledAction;
+    static constexpr bool isRef = std::is_lvalue_reference_v<strip_reference_wrapper_t<UnhandledAction>>;
+
+    static_assert(
+            (isRef && (std::is_lvalue_reference_v<std::tuple_element_t<1, TupleArgs>> && ...))
+            || (!isRef && (!std::is_lvalue_reference_v<std::tuple_element_t<1, TupleArgs>> && ...)));
+
     explicit constexpr ApplyFirstMatch(UnhandledAction unhandled, Equal eq, TupleArgs &&...args) noexcept
         : m_tuple(std::make_tuple(std::forward<TupleArgs>(args)...))
         , m_unhandled(std::move(unhandled))
@@ -1527,12 +1644,11 @@ public:
 
     template <typename KeyLike, typename ...Args>
     constexpr decltype(auto) apply(KeyLike const& key, Args &&...args) const {
-        auto f = [&](const auto& el) -> bool {
+        auto f = [&](auto const& el) -> bool {
             return std::invoke(m_cmp, el, key);
         };
 
-        using ResultType = decltype(invoke(m_unhandled, args...));
-        return foreach<ResultType, 0>(f, std::forward<Args>(args)...);
+        return foreach<0>(f, std::forward<Args>(args)...);
     }
 
     static constexpr size_t size() noexcept {
@@ -1540,7 +1656,7 @@ public:
     }
 private:
     template <typename F, typename ...Args>
-    constexpr decltype(auto) invoke(F f, Args &&...args) const {
+    constexpr decltype(auto) invoke(F const& f, Args &&...args) const {
         if constexpr (std::is_invocable_v<F, Args...>) {
             return std::invoke(f, std::forward<Args>(args)...);
         } else {
@@ -1549,34 +1665,40 @@ private:
         }
     }
 
-    template <typename ResultType, unsigned shift, typename ...Args>
-    constexpr ResultType foreach(auto check_fn, Args &&...args) const {
-        const auto& [key, fn] = get<shift>(m_tuple);
-        if (check_fn(key)) {
+    template <unsigned shift, typename ...Args>
+    constexpr decltype(auto) foreach(auto const& checkFn, Args &&...args) const {
+        auto const& [key, fn] = get<shift>(m_tuple);
+        if (checkFn(key)) {
             return invoke(fn, std::forward<Args>(args)...);
         } else {
             if constexpr (std::tuple_size_v<decltype(m_tuple)> > shift + 1) {
-                return foreach<ResultType, shift + 1>(check_fn, args...);
+                return foreach<shift + 1>(checkFn, std::forward<Args>(args)...);
             } else {
                 return invoke(m_unhandled, std::forward<Args>(args)...);
             }
         }
     }
 
-    const std::tuple<TupleArgs...> m_tuple;
-    const UnhandledAction m_unhandled;
-    const Equal m_cmp;
+    std::tuple<TupleArgs...> const m_tuple;
+    strip_reference_wrapper_t<UnhandledAction> const m_unhandled;
+    Equal const m_cmp;
 };
 
 
 template <typename UnhandledAction, typename ...TupleArgs>
 static constexpr auto makeFirstMatch(UnhandledAction unhandled, TupleArgs &&...args) noexcept {
-    return ApplyFirstMatch(unhandled, std::equal_to<>{}, std::forward<TupleArgs>(args)...);
+    return ApplyFirstMatch(std::move(unhandled), std::equal_to<>{}, std::forward<TupleArgs>(args)...);
 }
 
+//
+//template <typename UnhandledActionT, typename ...TupleArgs>
+//static constexpr auto makeFirstMatch(std::reference_wrapper<UnhandledActionT> unhandled, TupleArgs &&...args) noexcept {
+//    return ApplyFirstMatch<UnhandledActionT&, decltype(std::equal_to<>{}), TupleArgs...>(unhandled.get(), std::equal_to<>{}, std::forward<TupleArgs>(args)...);
+//}
+
 template <typename UnhandledAction, typename Equal, typename ...TupleArgs>
-static constexpr auto makeFirstMatchEq(UnhandledAction unhandled, Equal eq, TupleArgs &&...args) noexcept {
-    return ApplyFirstMatch(unhandled, eq, std::forward<TupleArgs>(args)...);
+static constexpr auto makeFirstMatchEq(UnhandledAction&& unhandled, Equal eq, TupleArgs &&...args) noexcept {
+    return ApplyFirstMatch(std::forward<UnhandledAction>(unhandled), std::move(eq), std::forward<TupleArgs>(args)...);
 }
 
 }

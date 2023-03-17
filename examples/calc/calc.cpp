@@ -34,7 +34,7 @@ double divide(double lhs, double rhs) noexcept {
 class Expr {
 public:
     using NumberType = double;
-    using Op = NumberType(*)(NumberType, NumberType);
+    using Op = NumberType(*)(NumberType, NumberType) noexcept;
     using ptr = std::shared_ptr<Expr>;
 
     static constexpr auto opSelectorLow = details::makeFirstMatch((Expr::Op)nullptr,

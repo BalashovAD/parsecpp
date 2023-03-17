@@ -1,7 +1,7 @@
 #include "../testHelper.h"
 
 TEST(Map, KeyValue) {
-    auto key = letters<false, false, std::string>() << spaces() << charFrom('=') << spaces();
+    auto key = letters<false, std::string>() << spaces() << charFrom('=') << spaces();
     auto value = number<int>() << spaces() << charFrom(';') << spaces();
     auto parser = toMap(key, value).endOfStream();
 
@@ -15,7 +15,7 @@ TEST(Map, KeyValue) {
 }
 
 TEST(Map, KeyValueRestoreInTheMiddle) {
-    auto key = letters<false, false, std::string>() << charFrom('=');
+    auto key = letters<false, std::string>() << charFrom('=');
     auto value = number<int>() << charFrom(';');
 
     auto parser = toMap<false>(key, value);
@@ -27,7 +27,7 @@ TEST(Map, KeyValueRestoreInTheMiddle) {
 }
 
 TEST(Map, KeyValueDelimRestoreInTheMiddle) {
-    auto key = letters<false, false, std::string>() << charFrom('=');
+    auto key = letters<false, std::string>() << charFrom('=');
     auto value = number<int>();
     auto delimiter = charFrom(';');
 
@@ -40,7 +40,7 @@ TEST(Map, KeyValueDelimRestoreInTheMiddle) {
 }
 
 TEST(Map, KeyValueDelimRestoreLastDelimiter) {
-    auto key = letters<false, false, std::string>() << charFrom('=');
+    auto key = letters<false, std::string>() << charFrom('=');
     auto value = number<int>();
     auto delimiter = charFrom(';');
 
@@ -51,7 +51,7 @@ TEST(Map, KeyValueDelimRestoreLastDelimiter) {
 
 
 TEST(Map, KeyValueDelim) {
-    auto key = letters<false, false, std::string>() << spaces() << charFrom('=') << spaces();
+    auto key = letters<false, std::string>() << spaces() << charFrom('=') << spaces();
     auto value = spaces() >> number<int>() << spaces();
     auto delimiter = spaces() >> charFrom(',') << spaces();
     auto parser = toMap(key, value, delimiter).endOfStream();
@@ -63,10 +63,11 @@ TEST(Map, KeyValueDelim) {
     failed_parsing(parser, 5, "test=");
     failed_parsing(parser, 7, "test=5 q=5");
     failed_parsing(parser, 10, "test=1, q=");
+    failed_parsing(parser, 12, "test=1, q=12,");
 }
 
 TEST(Map, KeyValueDelimNotErrorInTheMiddle) {
-    auto key = letters<false, false, std::string>() << spaces() << charFrom('=') << spaces();
+    auto key = letters<false, std::string>() << spaces() << charFrom('=') << spaces();
     auto value = spaces() >> number<int>() << spaces();
     auto delimiter = spaces() >> charFrom(',') << spaces();
     auto parser = toMap<false>(key, value, delimiter);

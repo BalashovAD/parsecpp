@@ -9,6 +9,12 @@
 
 namespace prs {
 
+/**
+ * @tparam errorInTheMiddle - fail parser if key can be parsed and value cannot
+ * Key := ParserKey::Type
+ * Value := ParserValue::Type
+ * @return Parser<std::map<Key, Value>>
+ */
 template <bool errorInTheMiddle = true
         , size_t maxIteration = MAX_ITERATION
         , ParserType ParserKey
@@ -51,6 +57,12 @@ auto toMap(ParserKey key, ParserValue value) noexcept {
 }
 
 
+/**
+ * @tparam errorInTheMiddle - fail parser if key or delim can be parsed and value(key) cannot
+ * Key := ParserKey::Type
+ * Value := ParserValue::Type
+ * @return Parser<std::map<Key, Value>>
+ */
 template <bool errorInTheMiddle = true
         , size_t maxIteration = MAX_ITERATION
         , ParserType ParserKey
