@@ -8,6 +8,10 @@
 
 namespace prs {
 
+
+/**
+ * @return Parser<Number>
+ */
 template <typename Number = double>
     requires (std::is_arithmetic_v<Number>)
 auto number() noexcept {

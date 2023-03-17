@@ -58,6 +58,9 @@ public:
         return operator()(stream);
     }
 
+    /**
+     * @def `>>` :: Parser<A> -> Parser<B> -> Parser<B>
+     */
     template <typename B, typename Rhs>
     auto operator>>(Parser<B, Rhs> rhs) const noexcept {
         return Parser<B>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
@@ -67,6 +70,10 @@ public:
         });
     }
 
+
+    /**
+     * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
+     */
     template <typename B, typename Rhs>
     auto operator<<(Parser<B, Rhs> rhs) const noexcept {
         constexpr bool firstCallNoexcept = nothrow && Parser<B, Rhs>::nothrow;
@@ -82,6 +89,7 @@ public:
 
     /*
      * <$>, fmap operator
+     * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
     template <std::invocable<T> ListFn>
     friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
@@ -91,6 +99,9 @@ public:
     }
 
 
+    /**
+     * @def `|` :: Parser<A> -> Parser<A> -> Parser<A>
+     */
     template <typename Rhs>
     auto operator|(Parser<T, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
@@ -110,6 +121,10 @@ public:
     template <typename A>
     using MaybeValue = std::conditional_t<std::is_same_v<A, Drop>, Drop, std::optional<A>>;
 
+
+    /**
+     * @def maybe :: Parser<A> -> Parser<std::optional<B>>
+     */
     auto maybe() const noexcept {
         return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream) {
             auto backup = stream.pos();
@@ -127,6 +142,9 @@ public:
     }
 
 
+    /**
+     * @def maybeOr :: Parser<A> -> Parser<A>
+     */
     auto maybeOr(T const& defaultValue) const noexcept {
         return Parser<T>::make([parser = *this, defaultValue](Stream& stream) {
             auto backup = stream.pos();
@@ -138,6 +156,9 @@ public:
     }
 
 
+    /**
+     * @def repeat :: Parser<A> -> Parser<std::vector<A>>
+     */
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION>
             requires(!std::is_same_v<T, Drop>)
     auto repeat() const noexcept {
@@ -165,6 +186,9 @@ public:
         });
     }
 
+    /**
+     * @def repeat :: Parser<Drop> -> Parser<Drop>
+     */
     template <size_t maxIteration = MAX_ITERATION>
             requires(std::is_same_v<T, Drop>)
     auto repeat() const noexcept {
@@ -187,6 +211,9 @@ public:
     }
 
 
+    /**
+     * @def repeat :: Parser<A> -> Parser<Delim> -> Parser<std::vector<A>>
+     */
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(!std::is_same_v<T, Drop>)
     auto repeat(Delimiter tDelimiter) const noexcept {
@@ -221,6 +248,9 @@ public:
     }
 
 
+    /**
+     * @def repeat :: Parser<Drop> -> Parser<Delim> -> Parser<Drop>
+     */
     template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(std::is_same_v<T, Drop>)
     auto repeat(Delimiter tDelimiter) const noexcept {
@@ -248,6 +278,9 @@ public:
     }
 
 
+    /**
+     * @def cond :: Parser<A> -> Parser<A>
+     */
     template <std::predicate<T const&> Fn>
             requires (!std::predicate<T const&, Stream&>)
     auto cond(Fn test) const noexcept {
@@ -262,6 +295,9 @@ public:
         });
     }
 
+    /**
+     * @def cond :: Parser<A> -> Parser<A>
+     */
     template <std::predicate<T const&, Stream&> Fn>
     auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
@@ -275,6 +311,9 @@ public:
         });
     }
 
+    /**
+     * @def Drop :: Parser<A> -> Parser<Drop>
+     */
     auto drop() const noexcept {
         return Parser<Drop>::make([p = *this](Stream& s) {
             return p.apply(s).map([](auto &&) {
@@ -283,12 +322,18 @@ public:
         });
     }
 
+    /**
+     * @def endOfStream :: Parser<A> -> Parser<A>
+     */
     auto endOfStream() const noexcept {
         return cond([](T const& t, Stream& s) {
             return s.eos();
         });
     }
 
+    /**
+     * @def mustConsume :: Parser<A> -> Parser<A>
+     */
     auto mustConsume() const noexcept {
         return make([p = *this](Stream& s) {
             auto pos = s.pos();
@@ -312,6 +357,9 @@ public:
         });
     }
 
+    /**
+     * @def toCommonType :: Parser<A, Fn> -> Parser'<A>
+     */
     auto toCommonType() const noexcept {
         details::StdFunction<T> f = [fn = m_fn](Stream& stream) {
             return std::invoke(fn, stream);

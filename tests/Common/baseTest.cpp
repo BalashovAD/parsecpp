@@ -39,11 +39,11 @@ TEST(Base, ParseWord) {
     success_parsing(parser, "test", "test", "");
     success_parsing(parser, "test", "test w", " w");
     success_parsing(parser, "test", "test2", "2");
-    success_parsing(parser, "", " test", " test");
+    failed_parsing(parser, 0, " test");
 }
 
 TEST(Base, ParseWordNoEmpty) {
-    auto parser = letters<false>();
+    auto parser = letters();
 
     success_parsing(parser, "test", "test", "");
 
@@ -53,7 +53,7 @@ TEST(Base, ParseWordNoEmpty) {
 }
 
 TEST(Base, ParseWordAllowDigit) {
-    auto parser = letters<true, true>();
+    auto parser = letters<true>();
 
     success_parsing(parser, "test2", "test2", "");
     success_parsing(parser, "2test", "2test", "");

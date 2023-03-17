@@ -154,7 +154,7 @@ std::string generateChallenge(size_t size) noexcept {
 static std::string CHALLENGE = generateChallenge(100);
 
 static void BM_toArrayLoop(benchmark::State& state) {
-    auto parser = constructParserInLoopRepeat(charFrom('{') >> letters<true, false, std::string>() << charFrom('}'));
+    auto parser = constructParserInLoopRepeat(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
 
@@ -168,7 +168,7 @@ static void BM_toArrayLoop(benchmark::State& state) {
 BENCHMARK(BM_toArrayLoop);
 
 static void BM_toArrayDoWhile(benchmark::State& state) {
-    auto parser = doWhile(charFrom('{') >> letters<true, false, std::string>() << charFrom('}'));
+    auto parser = doWhile(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
 
@@ -183,7 +183,7 @@ BENCHMARK(BM_toArrayDoWhile);
 
 
 static void BM_toArrayYcomb(benchmark::State& state) {
-    auto parser = Ycomb(charFrom('{') >> letters<true, false, std::string>() << charFrom('}'));
+    auto parser = Ycomb(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
 
@@ -198,7 +198,7 @@ BENCHMARK(BM_toArrayYcomb);
 
 
 static void BM_toArrayClass(benchmark::State& state) {
-    auto parser = doWhileClass(charFrom('{') >> letters<true, false, std::string>() << charFrom('}'));
+    auto parser = doWhileClass(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
 

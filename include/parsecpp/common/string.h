@@ -6,6 +6,10 @@
 
 namespace prs {
 
+/**
+ *
+ * @return Parser<char>
+ */
 inline auto anyChar() noexcept {
     auto p = [](Stream& stream) {
         if (stream.eos()) {
@@ -20,6 +24,10 @@ inline auto anyChar() noexcept {
     return prs::make_parser(p);
 }
 
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto spaces() noexcept {
     return make_parser([](Stream& str) {
         while (str.checkFirst([](char c) {
@@ -31,6 +39,10 @@ inline auto spaces() noexcept {
 }
 
 
+/**
+ *
+ * @return Parser<Unit>
+ */
 inline auto spacesFast() noexcept {
     return make_parser([](Stream& str) {
         while (str.checkFirst([](char c) {
@@ -41,7 +53,12 @@ inline auto spacesFast() noexcept {
     });
 }
 
-template <bool allowEmpty = true, bool allowDigit = false, typename StringType = std::string_view>
+
+/**
+ *
+ * @return Parser<StringType>
+ */
+template <bool allowDigit = false, typename StringType = std::string_view>
 auto letters() noexcept {
     return make_parser([](Stream& str) {
         auto start = str.pos();
@@ -50,7 +67,7 @@ auto letters() noexcept {
         }));
 
         auto end = str.pos();
-        if (!allowEmpty && start == end) {
+        if (start == end) {
             return Parser<StringType>::makeError("Empty word", str.pos());
         } else {
             return Parser<StringType>::data(StringType{str.get_sv(start, end)});

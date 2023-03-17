@@ -16,7 +16,7 @@ public:
 
     template <typename KeyLike, typename ...Args>
     constexpr decltype(auto) apply(KeyLike const& key, Args &&...args) const {
-        auto f = [&](const auto& el) -> bool {
+        auto f = [&](auto const& el) -> bool {
             return std::invoke(m_cmp, el, key);
         };
 
@@ -29,7 +29,7 @@ public:
     }
 private:
     template <typename F, typename ...Args>
-    constexpr decltype(auto) invoke(F f, Args &&...args) const {
+    constexpr decltype(auto) invoke(F const& f, Args &&...args) const {
         if constexpr (std::is_invocable_v<F, Args...>) {
             return std::invoke(f, std::forward<Args>(args)...);
         } else {
@@ -39,33 +39,33 @@ private:
     }
 
     template <typename ResultType, unsigned shift, typename ...Args>
-    constexpr ResultType foreach(auto check_fn, Args &&...args) const {
-        const auto& [key, fn] = get<shift>(m_tuple);
-        if (check_fn(key)) {
+    constexpr ResultType foreach(auto const& checkFn, Args &&...args) const {
+        auto const& [key, fn] = get<shift>(m_tuple);
+        if (checkFn(key)) {
             return invoke(fn, std::forward<Args>(args)...);
         } else {
             if constexpr (std::tuple_size_v<decltype(m_tuple)> > shift + 1) {
-                return foreach<ResultType, shift + 1>(check_fn, args...);
+                return foreach<ResultType, shift + 1>(checkFn, args...);
             } else {
                 return invoke(m_unhandled, std::forward<Args>(args)...);
             }
         }
     }
 
-    const std::tuple<TupleArgs...> m_tuple;
-    const UnhandledAction m_unhandled;
-    const Equal m_cmp;
+    std::tuple<TupleArgs...> const m_tuple;
+    UnhandledAction const m_unhandled;
+    Equal const m_cmp;
 };
 
 
 template <typename UnhandledAction, typename ...TupleArgs>
 static constexpr auto makeFirstMatch(UnhandledAction unhandled, TupleArgs &&...args) noexcept {
-    return ApplyFirstMatch(unhandled, std::equal_to<>{}, std::forward<TupleArgs>(args)...);
+    return ApplyFirstMatch(std::move(unhandled), std::equal_to<>{}, std::forward<TupleArgs>(args)...);
 }
 
 template <typename UnhandledAction, typename Equal, typename ...TupleArgs>
 static constexpr auto makeFirstMatchEq(UnhandledAction unhandled, Equal eq, TupleArgs &&...args) noexcept {
-    return ApplyFirstMatch(unhandled, eq, std::forward<TupleArgs>(args)...);
+    return ApplyFirstMatch(std::move(unhandled), std::move(eq), std::forward<TupleArgs>(args)...);
 }
 
 }
