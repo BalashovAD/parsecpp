@@ -86,15 +86,17 @@ static constexpr auto makeFirstMatch(UnhandledAction unhandled, TupleArgs &&...a
     return ApplyFirstMatch(std::move(unhandled), std::equal_to<>{}, std::forward<TupleArgs>(args)...);
 }
 
-//
-//template <typename UnhandledActionT, typename ...TupleArgs>
-//static constexpr auto makeFirstMatch(std::reference_wrapper<UnhandledActionT> unhandled, TupleArgs &&...args) noexcept {
-//    return ApplyFirstMatch<UnhandledActionT&, decltype(std::equal_to<>{}), TupleArgs...>(unhandled.get(), std::equal_to<>{}, std::forward<TupleArgs>(args)...);
-//}
-
 template <typename UnhandledAction, typename Equal, typename ...TupleArgs>
-static constexpr auto makeFirstMatchEq(UnhandledAction&& unhandled, Equal eq, TupleArgs &&...args) noexcept {
-    return ApplyFirstMatch(std::forward<UnhandledAction>(unhandled), std::move(eq), std::forward<TupleArgs>(args)...);
+static constexpr auto makeFirstMatchEq(UnhandledAction unhandled, Equal eq, TupleArgs &&...args) noexcept {
+    return ApplyFirstMatch(std::move(unhandled), std::move(eq), std::forward<TupleArgs>(args)...);
 }
+
+
+struct StartWith {
+    template <typename PrefixType, typename StringType>
+    constexpr bool operator()(PrefixType const& prefix, StringType const& str) const noexcept {
+        return str.starts_with(prefix);
+    }
+};
 
 }
