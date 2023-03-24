@@ -21,7 +21,7 @@ inline auto anyChar() noexcept {
         }
     };
 
-    return prs::make_parser(p);
+    return make_parser(p);
 }
 
 /**

@@ -6,9 +6,13 @@
 namespace prs {
 
 
-template <typename Fn>
+template <typename Ctx = VoidContext, typename Fn>
 auto make_parser(Fn &&f) noexcept {
-    return Parser<typename std::invoke_result_t<Fn, Stream&>::Body>::make(std::forward<Fn>(f));
+    using T = typename std::conditional_t<std::is_invocable_v<Fn, Stream&>
+            , std::invoke_result<Fn, Stream&>
+            , std::invoke_result<Fn, Stream&, Ctx&>>::type::Body;
+
+    return Parser<T, Ctx>::make(std::forward<Fn>(f));
 }
 
 namespace details {

@@ -61,6 +61,30 @@ auto doWhile(ParserValue value) noexcept {
 }
 
 template <size_t reserve = 0, typename ParserValue>
+auto doWhileNoCtx(ParserValue value) noexcept {
+    using Value = parser_result_t<ParserValue>;
+    using Vector = std::vector<Value>;
+    return Parser<Vector>::make([parser = value](Stream& stream) {
+        Vector out;
+        out.reserve(reserve);
+
+        size_t iteration = 0;
+        auto backup = stream.pos();
+        do {
+            auto result = parser.apply(stream);
+            if (!result.isError()) {
+                out.emplace_back(std::move(result).data());
+                backup = stream.pos();
+            } else {
+                return Parser<Vector>::data(std::move(out));
+            }
+        } while (++iteration != 10000000ull);
+
+        return Parser<Vector>::makeError("Max iteration in repeat", stream.pos());
+    });
+}
+
+template <size_t reserve = 0, typename ParserValue>
 auto Ycomb(ParserValue value) noexcept {
     using Value = parser_result_t<ParserValue>;
     using Vector = std::vector<Value>;
@@ -151,65 +175,35 @@ std::string generateChallenge(size_t size) noexcept {
     return s.str();
 }
 
-static std::string CHALLENGE = generateChallenge(100);
+static inline std::string CHALLENGE = generateChallenge(100);
 
-static void BM_toArrayLoop(benchmark::State& state) {
-    auto parser = constructParserInLoopRepeat(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
+
+template <ParserType Parser>
+static void BM_toArray(benchmark::State& state, Parser const& parser) {
     for (auto _ : state) {
         Stream s{CHALLENGE};
-        std::string ctx;
 
-        bool isError = parser.apply(s, ctx).isError();
-        if (isError) {
-            std::cout << "Cannot parse" << std::endl;
+        auto ans = parser.apply(s);
+        if (ans.isError()) {
+            throw std::runtime_error("Cannot parse");
+        } else {
+            if (ans.data().size() != 100) {
+                throw std::runtime_error("size");
+            }
         }
     }
 }
 
-BENCHMARK(BM_toArrayLoop);
+static inline auto insideParser = charFrom('{') >> letters<false, std::string>() << charFrom('}');
 
-static void BM_toArrayDoWhile(benchmark::State& state) {
-    auto parser = doWhile(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
-    for (auto _ : state) {
-        Stream s{CHALLENGE};
-        std::array<std::string, 129> ctx;
+BENCHMARK_CAPTURE(BM_toArray, Loop, constructParserInLoopRepeat(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, DoWhile, doWhile(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, DoWhileNoCtx, doWhileNoCtx(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, Ycomb, Ycomb(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, Class, doWhileClass(insideParser));
 
-        bool isError = parser.apply(s, ctx).isError();
-        if (isError) {
-            std::cout << "Cannot parse" << std::endl;
-        }
-    }
-}
-
-BENCHMARK(BM_toArrayDoWhile);
-
-
-static void BM_toArrayYcomb(benchmark::State& state) {
-    auto parser = Ycomb(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
-    for (auto _ : state) {
-        Stream s{CHALLENGE};
-        std::string ctx;
-
-        bool isError = parser.apply(s, ctx).isError();
-        if (isError) {
-            std::cout << "Cannot parse" << std::endl;
-        }
-    }
-}
-
-BENCHMARK(BM_toArrayYcomb);
-
-
-static void BM_toArrayClass(benchmark::State& state) {
-    auto parser = doWhileClass(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
-    for (auto _ : state) {
-        Stream s{CHALLENGE};
-
-        bool isError = parser.apply(s).isError();
-        if (isError) {
-            std::cout << "Cannot parse" << std::endl;
-        }
-    }
-}
-
-BENCHMARK(BM_toArrayClass);
+BENCHMARK_CAPTURE(BM_toArray, ReserveLoop, constructParserInLoopRepeat<100>(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, ReserveDoWhile, doWhile<100>(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, ReserveDoWhileNoCtx, doWhileNoCtx<100>(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, ReserveYcomb, Ycomb<100>(insideParser));
+BENCHMARK_CAPTURE(BM_toArray, ReserveClass, doWhileClass<100>(insideParser));

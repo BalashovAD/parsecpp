@@ -33,9 +33,13 @@ using parser_result_t = typename Parser::Type;
 
 
 template <typename Parser>
+using parser_ctx_t = typename Parser::Ctx;
+
+
+template <typename Parser>
 constexpr bool is_parser_v = std::is_invocable_v<Parser, Stream&>;
 
-template<typename T>
+template <typename T>
 concept ParserType = is_parser_v<T>;
 
 static constexpr size_t MAX_ITERATION = 1000000;

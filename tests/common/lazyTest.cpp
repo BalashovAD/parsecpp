@@ -104,7 +104,7 @@ TEST(LazyCached, AB) {
 }
 
 
-auto f() noexcept -> decltype((charFrom('a') >> std::declval<Parser<Unit, LazyForget<Unit>>>() >> charFrom('b')).maybe() >> success()) {
+auto f() noexcept -> decltype((charFrom('a') >> std::declval<Parser<Unit, VoidContext, LazyForget<Unit>>>() >> charFrom('b')).maybe() >> success()) {
     return (charFrom('a') >> lazyForget<Unit>(f) >> charFrom('b')).maybe() >> success();
 }
 
