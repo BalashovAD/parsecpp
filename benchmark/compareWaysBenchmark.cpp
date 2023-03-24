@@ -12,7 +12,7 @@ template <size_t reserve = 0, typename ParserValue>
 auto constructParserInLoopRepeat(ParserValue value) noexcept {
     using Value = parser_result_t<ParserValue>;
     using P = Parser<std::vector<Value>>;
-    return P::make([value](Stream& stream) {
+    return P::make([value](Stream& stream, auto& ctx) {
         std::vector<Value> ans{};
 
         ans.reserve(reserve);
@@ -26,9 +26,9 @@ auto constructParserInLoopRepeat(ParserValue value) noexcept {
         };
 
         auto parser = value >>= emplace;
-        for (bool isError = parser.apply(stream).isError();
+        for (bool isError = parser.apply(stream, ctx).isError();
              !isError;
-             isError = parser.apply(stream).isError());
+             isError = parser.apply(stream, ctx).isError());
 
         stream.restorePos(backup);
         return P::data(ans);
@@ -40,14 +40,14 @@ template <size_t reserve = 0, typename ParserValue>
 auto doWhile(ParserValue value) noexcept {
     using Value = parser_result_t<ParserValue>;
     using Vector = std::vector<Value>;
-    return Parser<Vector>::make([parser = value](Stream& stream) {
+    return Parser<Vector>::make([parser = value](Stream& stream, auto& ctx) {
         Vector out;
         out.reserve(reserve);
 
         size_t iteration = 0;
         auto backup = stream.pos();
         do {
-            auto result = parser.apply(stream);
+            auto result = parser.apply(stream, ctx);
             if (!result.isError()) {
                 out.emplace_back(std::move(result).data());
                 backup = stream.pos();
@@ -64,7 +64,7 @@ template <size_t reserve = 0, typename ParserValue>
 auto Ycomb(ParserValue value) noexcept {
     using Value = parser_result_t<ParserValue>;
     using Vector = std::vector<Value>;
-    return Parser<Vector>::make([parser = value](Stream& stream) {
+    return Parser<Vector>::make([parser = value](Stream& stream, auto& ctx) {
         std::vector<Value> ans{};
         ans.reserve(reserve);
 
@@ -78,7 +78,7 @@ auto Ycomb(ParserValue value) noexcept {
 
         auto np = (parser >>= emplace);
         const auto p = [&](auto const& rec) -> void {
-            np.apply(stream).map([&](Drop _) {
+            np.apply(stream, ctx).map([&](Drop _) {
                 backup = stream.pos();
                 rec();
                 return _;
@@ -157,8 +157,9 @@ static void BM_toArrayLoop(benchmark::State& state) {
     auto parser = constructParserInLoopRepeat(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
+        std::string ctx;
 
-        bool isError = parser.apply(s).isError();
+        bool isError = parser.apply(s, ctx).isError();
         if (isError) {
             std::cout << "Cannot parse" << std::endl;
         }
@@ -171,8 +172,9 @@ static void BM_toArrayDoWhile(benchmark::State& state) {
     auto parser = doWhile(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
+        std::array<std::string, 129> ctx;
 
-        bool isError = parser.apply(s).isError();
+        bool isError = parser.apply(s, ctx).isError();
         if (isError) {
             std::cout << "Cannot parse" << std::endl;
         }
@@ -186,8 +188,9 @@ static void BM_toArrayYcomb(benchmark::State& state) {
     auto parser = Ycomb(charFrom('{') >> letters<false, std::string>() << charFrom('}'));
     for (auto _ : state) {
         Stream s{CHALLENGE};
+        std::string ctx;
 
-        bool isError = parser.apply(s).isError();
+        bool isError = parser.apply(s, ctx).isError();
         if (isError) {
             std::cout << "Cannot parse" << std::endl;
         }

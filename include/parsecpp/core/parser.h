@@ -25,8 +25,8 @@ using StdFunction = std::function<ResultType<T>(Stream&)>;
 
 }
 
-template <typename T, typename Func = details::StdFunction<T>>
-        requires std::invocable<Func, Stream&>
+template <typename T, typename Ctx = void, typename Func = details::StdFunction<T>>
+//        requires std::invocable<Func, Stream&>
 class Parser {
 public:
     static constexpr bool nothrow = std::is_nothrow_invocable_v<Func, Stream&>;
@@ -36,9 +36,10 @@ public:
     using Type = T;
     using Result = details::ResultType<T>;
 
-    template <std::invocable<Stream&> Fn>
+//    template <std::invocable<Stream&> Fn>
+    template <typename Fn>
     static auto make(Fn &&f) noexcept {
-        return Parser<T, Fn>(std::forward<Fn>(f));
+        return Parser<T, Ctx, Fn>(std::forward<Fn>(f));
     }
 
 
@@ -50,7 +51,21 @@ public:
     }
 
     Result operator()(Stream& stream) const noexcept(nothrow) {
-        return std::invoke(m_fn, stream);
+        if constexpr (!std::is_invocable_v<StoredFn, Stream&> && std::is_same_v<Ctx, void>) {
+            int voidCtx;
+            return std::invoke(m_fn, stream, voidCtx);
+        } else {
+            return std::invoke(m_fn, stream);
+        }
+    }
+
+    template <typename Context>
+    Result operator()(Stream& stream, Context& ctx) const noexcept(nothrow) {
+        if constexpr (std::is_invocable_v<StoredFn, Stream&, Context&>) {
+            return std::invoke(m_fn, stream, ctx);
+        } else {
+            return std::invoke(m_fn, stream);
+        }
     }
 
 
@@ -58,14 +73,19 @@ public:
         return operator()(stream);
     }
 
+    template <typename Context>
+    Result apply(Stream& stream, Context& ctx) const noexcept(nothrow) {
+        return operator()(stream, ctx);
+    }
+
     /**
      * @def `>>` :: Parser<A> -> Parser<B> -> Parser<B>
      */
     template <typename B, typename Rhs>
-    auto operator>>(Parser<B, Rhs> rhs) const noexcept {
-        return Parser<B>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
-            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
-                return rhs.apply(stream);
+    auto operator>>(Parser<B, Ctx, Rhs> rhs) const noexcept {
+        return Parser<B, Ctx>::make([lhs = *this, rhs](Stream& stream, auto& ctx) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
+            return lhs.apply(stream, ctx).flatMap([&rhs, &stream, &ctx](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
+                return rhs.apply(stream, ctx);
             });
         });
     }
@@ -75,11 +95,11 @@ public:
      * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
      */
     template <typename B, typename Rhs>
-    auto operator<<(Parser<B, Rhs> rhs) const noexcept {
+    auto operator<<(Parser<B, Ctx, Rhs> rhs) const noexcept {
         constexpr bool firstCallNoexcept = nothrow && Parser<B, Rhs>::nothrow;
-        return Parser<T>::make([lhs = *this, rhs](Stream& stream) noexcept(firstCallNoexcept) {
-            return lhs.apply(stream).flatMap([&rhs, &stream](T body) noexcept(Parser<Rhs>::nothrow) {
-                return rhs.apply(stream).map([mvBody = std::move(body)](auto const& _) {
+        return Parser<T>::make([lhs = *this, rhs](Stream& stream, auto& ctx) noexcept(firstCallNoexcept) {
+            return lhs.apply(stream, ctx).flatMap([&rhs, &stream, &ctx](T body) noexcept(Parser<Rhs>::nothrow) {
+                return rhs.apply(stream, ctx).map([mvBody = std::move(body)](auto const& _) {
                     return mvBody;
                 });
             });
@@ -103,12 +123,12 @@ public:
      * @def `|` :: Parser<A> -> Parser<A> -> Parser<A>
      */
     template <typename Rhs>
-    auto operator|(Parser<T, Rhs> rhs) const noexcept {
-        return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
+    auto operator|(Parser<T, Ctx, Rhs> rhs) const noexcept {
+        return Parser<T>::make([lhs = *this, rhs](Stream& stream, auto& ctx) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream, ctx).flatMapError([&](details::ParsingError const& firstError) {
                 stream.restorePos(backup);
-                return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
+                return rhs.apply(stream, ctx).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
                             "Or error: " + firstError.description + ", " + secondError.description
                                  , std::max(firstError.pos, secondError.pos));
@@ -361,7 +381,7 @@ public:
      * @def toCommonType :: Parser<A, Fn> -> Parser'<A>
      */
     auto toCommonType() const noexcept {
-        details::StdFunction<T> f = [fn = m_fn](Stream& stream) {
+        details::StdFunction<T> f = [fn = *this](Stream& stream) {
             return std::invoke(fn, stream);
         };
 
@@ -393,12 +413,6 @@ public:
         requires(std::convertible_to<U, T>)
     static Result data(U&& t) noexcept(std::is_nothrow_convertible_v<U, T>) {
         return Result{std::forward<U>(t)};
-    }
-
-    static auto alwaysError() noexcept {
-        return make([](Stream& s) {
-           return makeError("Always error", s.pos());
-        });
     }
 private:
     StoredFn m_fn;
