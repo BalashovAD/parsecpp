@@ -30,14 +30,15 @@ void printError(typename Parser<T>::Result const& result, Stream const& stream) 
 }
 
 
-template <typename Parser>
+template <typename Parser, typename Ctx = VoidContext>
 void success_parsing(Parser parser,
         parser_result_t<Parser> const& answer,
         std::string const& str,
         std::string_view remaining = "",
+        Ctx& ctx = VOID_CONTEXT,
         details::SourceLocation sourceLocation = details::SourceLocation::current()) {
     Stream s{str};
-    auto result = parser.apply(s);
+    auto result = parser.apply(s, ctx);
 
     if (result.isError()) {
         printError<typename Parser::Type>(result, s);
@@ -47,13 +48,14 @@ void success_parsing(Parser parser,
     EXPECT_EQ(s.remaining(), remaining) << "Test: " << sourceLocation.prettyPrint();
 }
 
-template <typename Parser>
+template <typename Parser, typename Ctx = VoidContext>
 void failed_parsing(Parser parser,
                     size_t pos,
                     std::string_view str,
+                    Ctx& ctx = VOID_CONTEXT,
                     details::SourceLocation sourceLocation = details::SourceLocation::current()) {
     Stream s{str};
-    auto result = parser.apply(s);
+    auto result = parser.apply(s, ctx);
 
     if (!result.isError()) {
         printError<typename Parser::Type>(result, s);

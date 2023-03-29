@@ -21,7 +21,7 @@ inline auto anyChar() noexcept {
         }
     };
 
-    return prs::make_parser(p);
+    return make_parser(p);
 }
 
 /**
@@ -238,12 +238,32 @@ auto literal(std::string str) noexcept {
 
 
 template <ParserType P>
+    requires (IsVoidCtx<parser_ctx_t<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream) {
         auto start = stream.pos();
         auto searchPos = start;
         while (!stream.eos()) {
             if (decltype(auto) result = parser.apply(stream); !result.isError()) {
+                return P::data(std::move(result).data());
+            } else {
+                stream.restorePos(++searchPos);
+            }
+        }
+
+        stream.restorePos(start);
+        return P::makeError("Cannot find", stream.pos());
+    });
+}
+
+template <ParserType P>
+    requires (!IsVoidCtx<parser_ctx_t<P>>)
+auto search(P tParser) noexcept {
+    return P::make([parser = std::move(tParser)](Stream& stream, auto& ctx) {
+        auto start = stream.pos();
+        auto searchPos = start;
+        while (!stream.eos()) {
+            if (decltype(auto) result = parser.apply(stream, ctx); !result.isError()) {
                 return P::data(std::move(result).data());
             } else {
                 stream.restorePos(++searchPos);

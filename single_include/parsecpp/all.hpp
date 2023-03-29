@@ -302,9 +302,13 @@ using parser_result_t = typename Parser::Type;
 
 
 template <typename Parser>
+using parser_ctx_t = typename Parser::Ctx;
+
+
+template <typename Parser>
 constexpr bool is_parser_v = std::is_invocable_v<Parser, Stream&>;
 
-template<typename T>
+template <typename T>
 concept ParserType = is_parser_v<T>;
 
 static constexpr size_t MAX_ITERATION = 1000000;
@@ -572,6 +576,250 @@ private:
 
 // #include <parsecpp/core/parsingError.h>
 
+// #include <parsecpp/core/context.h>
+
+
+namespace prs {
+
+
+namespace details {
+
+// Type wrapper
+template <typename T, typename K>
+struct TypeWrapperB {
+    using Type = T;
+    using Key = K;
+};
+
+
+template <typename T>
+using CtxType = TypeWrapperB<T, std::remove_const_t<T>>;
+
+template <typename T, typename Name>
+using NamedType = TypeWrapperB<T, Name>;
+
+
+template <typename T>
+struct ConvertToTypeWrapperT {
+    using type = CtxType<T>;
+};
+
+template <typename T, typename K>
+struct ConvertToTypeWrapperT<TypeWrapperB<T, K>> {
+    using type = TypeWrapperB<T, K>;
+};
+
+template <typename T>
+using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::type;
+
+
+// Context wrapper
+template <typename ...Ctx>
+class ContextWrapperT;
+
+
+template<>
+class ContextWrapperT<> {
+public:
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 0;
+};
+
+
+template <typename T, typename K>
+class ContextWrapperT<TypeWrapperB<T, K>> {
+public:
+    using Type = T;
+    using Key = K;
+
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 1;
+
+    explicit ContextWrapperT(T& value) noexcept
+        : m_value(value) {
+
+    }
+
+    Type& get() noexcept {
+        return m_value;
+    }
+
+    Type const& get() const noexcept {
+        return m_value;
+    }
+private:
+    T& m_value;
+};
+
+
+template <typename T, typename K>
+class ContextWrapperT<TypeWrapperB<T const, K>> {
+public:
+    using Type = T;
+    using Key = K;
+
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 1;
+
+    explicit ContextWrapperT(T const& value) noexcept
+        : m_value(value) {
+
+    }
+
+    Type const& get() const noexcept {
+        return m_value;
+    }
+private:
+    T const& m_value;
+};
+
+
+template <typename ...Types>
+class ContextWrapperT : public ContextWrapperT<>, public ContextWrapperT<Types> ... {
+public:
+    using TupleTypes = std::tuple<Types...>;
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = sizeof...(Types);
+
+    static_assert(size > 1);
+
+    template <typename ...Args>
+        requires(sizeof...(Args) == size)
+    explicit ContextWrapperT(Args& ...args) noexcept
+        : ContextWrapperT<ConvertToTypeWrapper<Args>>(args)... {
+
+    }
+};
+
+// utils
+template<typename T, typename = std::void_t<>>
+struct IsCtxT : std::false_type {};
+
+template<typename T>
+struct IsCtxT<T, std::enable_if_t<T::iscontext, void>>
+        : std::true_type {};
+
+
+template<size_t index, typename Tuple, typename T>
+constexpr int findIndex() noexcept {
+    if constexpr (index >= std::tuple_size_v<Tuple>) {
+        return -1;
+    } else if constexpr (std::is_same_v<typename std::tuple_element_t<index, Tuple>::Key, typename ConvertToTypeWrapper<T>::Key>) {
+        return index;
+    } else {
+        return findIndex<index + 1, Tuple, T>();
+    }
+}
+
+}
+
+template <typename ...Args>
+using ContextWrapper = details::ContextWrapperT<details::ConvertToTypeWrapper<Args>...>;
+
+using VoidContext = ContextWrapper<>;
+static inline VoidContext VOID_CONTEXT{};
+
+
+template<typename Ctx>
+constexpr inline bool IsCtx = details::IsCtxT<Ctx>::value;
+
+template<typename Ctx>
+concept ContextType = IsCtx<Ctx>;
+
+template<ContextType Ctx>
+constexpr inline bool IsVoidCtx = std::is_same_v<Ctx, VoidContext>;
+
+namespace details {
+
+template<ContextType Ctx>
+constexpr size_t sizeCtx() noexcept {
+    return Ctx::size;
+}
+
+template <ContextType Ctx, typename T>
+constexpr bool containsTypeF() noexcept {
+    constexpr auto size = sizeCtx<Ctx>();
+    if constexpr (size == 0) {
+        return false;
+    } else if constexpr (size == 1) {
+        return std::is_same_v<typename Ctx::Key, typename ConvertToTypeWrapper<T>::Key>;
+    } else {
+        return findIndex<0, typename Ctx::TupleTypes, T>() != -1;
+    }
+}
+
+template <ContextType Ctx1, ContextType Ctx2>
+struct unionImpl;
+
+template <ContextType Ctx1>
+struct unionImpl<Ctx1, VoidContext> {
+    using Type = Ctx1;
+};
+
+template <ContextType Ctx1, typename T>
+    requires (containsTypeF<Ctx1, T>())
+struct unionImpl<Ctx1, details::ContextWrapperT<T>> {
+    using Type = Ctx1;
+};
+
+template <typename T1, typename T2>
+    requires (!std::is_same_v<T1, T2>)
+struct unionImpl<details::ContextWrapperT<T1>, details::ContextWrapperT<T2>> {
+    using Type = ContextWrapper<T1, T2>;
+};
+
+
+template <typename ...Args, typename T>
+    requires (!containsTypeF<ContextWrapperT<Args...>, T>())
+struct unionImpl<ContextWrapperT<Args...>, details::ContextWrapperT<T>> {
+    using Type = ContextWrapperT<Args..., T>;
+};
+
+
+template <typename Ctx1, typename Head, typename ...Args>
+struct unionImpl<Ctx1, ContextWrapperT<Head, Args...>> {
+    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Args...>>::Type;
+};
+
+
+template <typename Ctx, typename T>
+struct GetTypeWrapperT {
+    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
+};
+
+template <typename CtxType, typename T>
+struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
+    using Type = typename CtxType::Type;
+};
+
+template <typename Ctx, typename T>
+    requires(containsTypeF<Ctx, T>())
+using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
+
+}
+
+template <ContextType Ctx>
+static constexpr size_t sizeCtx = details::sizeCtx<Ctx>();
+
+
+template <ContextType Ctx, typename T>
+static constexpr bool containsType = details::containsTypeF<Ctx, T>();
+
+
+template <ContextType Ctx1, ContextType Ctx2>
+using UnionCtx = typename details::unionImpl<Ctx1, Ctx2>::Type;
+
+
+template <typename T, ContextType Ctx>
+    requires (containsType<Ctx, T>)
+decltype(auto) get(Ctx& ctx) noexcept {
+    using TypeWrapper = details::GetTypeWrapper<Ctx, T>;
+    return static_cast<ContextWrapper<TypeWrapper>>(ctx).get();
+}
+
+
+}
+
 // #include <parsecpp/core/stream.h>
 
 
@@ -590,52 +838,89 @@ namespace details {
 template <class Body>
 using ResultType = Expected<Body, ParsingError>;
 
-template <typename T>
-using StdFunction = std::function<ResultType<T>(Stream&)>;
+template <typename T, ContextType Ctx = VoidContext>
+using StdFunction = std::conditional_t<IsVoidCtx<Ctx>,
+        std::function<ResultType<T>(Stream&)>, std::function<ResultType<T>(Stream&, Ctx&)>>;
 
 }
 
-template <typename T, typename Func = details::StdFunction<T>>
-        requires std::invocable<Func, Stream&>
+template <typename T, ContextType CtxType = VoidContext, typename Func = details::StdFunction<T, CtxType>>
+//        requires std::invocable<Func, Stream&>
 class Parser {
 public:
     static constexpr bool nothrow = std::is_nothrow_invocable_v<Func, Stream&>;
+    static constexpr bool nocontext = IsVoidCtx<CtxType>;
 
     using StoredFn = std::decay_t<Func>;
 
     using Type = T;
+    using Ctx = CtxType;
     using Result = details::ResultType<T>;
 
-    template <std::invocable<Stream&> Fn>
-    static auto make(Fn &&f) noexcept {
-        return Parser<T, Fn>(std::forward<Fn>(f));
+//    template <std::invocable<Stream&> Fn>
+    template <typename Fn>
+    constexpr static auto make(Fn &&f) noexcept {
+        return Parser<T, Ctx, Fn>(std::forward<Fn>(f));
     }
 
 
     template <typename U>
         requires(std::is_same_v<std::decay_t<U>, StoredFn>)
-    explicit Parser(U&& f) noexcept
+    constexpr explicit Parser(U&& f) noexcept
         : m_fn(std::forward<U>(f)) {
 
     }
 
-    Result operator()(Stream& stream) const noexcept(nothrow) {
-        return std::invoke(m_fn, stream);
+    constexpr Result operator()(Stream& stream) const noexcept(nothrow) {
+        if constexpr (!std::is_invocable_v<StoredFn, Stream&> && std::is_same_v<Ctx, VoidContext>) {
+            return std::invoke(m_fn, stream, VOID_CONTEXT);
+        } else {
+            return std::invoke(m_fn, stream);
+        }
+    }
+
+    template <ContextType Context>
+    constexpr Result operator()(Stream& stream, Context& ctx) const noexcept(nothrow) {
+        if constexpr (std::is_invocable_v<StoredFn, Stream&, Context&>) {
+            return std::invoke(m_fn, stream, ctx);
+        } else {
+            return std::invoke(m_fn, stream);
+        }
     }
 
 
-    Result apply(Stream& stream) const noexcept(nothrow) {
+    constexpr Result apply(Stream& stream) const noexcept(nothrow) {
         return operator()(stream);
+    }
+
+    template <typename Context>
+    constexpr Result apply(Stream& stream, Context& ctx) const noexcept(nothrow) {
+        return operator()(stream, ctx);
     }
 
     /**
      * @def `>>` :: Parser<A> -> Parser<B> -> Parser<B>
      */
-    template <typename B, typename Rhs>
-    auto operator>>(Parser<B, Rhs> rhs) const noexcept {
-        return Parser<B>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Rhs>::nothrow) {
-            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<B, Rhs>::nothrow) {
+    template <typename B, typename CtxB, typename Rhs>
+        requires (IsVoidCtx<UnionCtx<Ctx, CtxB>>)
+    constexpr auto operator>>(Parser<B, CtxB, Rhs> rhs) const noexcept {
+        return Parser<B, VoidContext>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Ctx, Rhs>::nothrow) {
+            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<B, Ctx, Rhs>::nothrow) {
                 return rhs.apply(stream);
+            });
+        });
+    }
+
+
+    /**
+     * @def `>>` :: Parser<A> -> Parser<B> -> Parser<B>
+     */
+    template <typename B, typename CtxB, typename Rhs>
+        requires (!IsVoidCtx<UnionCtx<Ctx, CtxB>>)
+    constexpr auto operator>>(Parser<B, CtxB, Rhs> rhs) const noexcept {
+        return Parser<B, UnionCtx<Ctx, CtxB>>::make([lhs = *this, rhs](Stream& stream, auto& ctx) noexcept(nothrow && Parser<B, CtxB, Rhs>::nothrow) {
+            return lhs.apply(stream, ctx).flatMap([&rhs, &stream, &ctx](T const& body) noexcept(Parser<B, CtxB, Rhs>::nothrow) {
+                return rhs.apply(stream, ctx);
             });
         });
     }
@@ -644,16 +929,26 @@ public:
     /**
      * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
      */
-    template <typename B, typename Rhs>
-    auto operator<<(Parser<B, Rhs> rhs) const noexcept {
-        constexpr bool firstCallNoexcept = nothrow && Parser<B, Rhs>::nothrow;
-        return Parser<T>::make([lhs = *this, rhs](Stream& stream) noexcept(firstCallNoexcept) {
-            return lhs.apply(stream).flatMap([&rhs, &stream](T body) noexcept(Parser<Rhs>::nothrow) {
-                return rhs.apply(stream).map([mvBody = std::move(body)](auto const& _) {
-                    return mvBody;
+    template <typename B, typename CtxB, typename Rhs>
+    constexpr auto operator<<(Parser<B, CtxB, Rhs> rhs) const noexcept {
+        constexpr bool firstCallNoexcept = nothrow && Parser<B, Ctx, Rhs>::nothrow;
+        if constexpr (IsVoidCtx<Ctx>) {
+            return Parser<T>::make([lhs = *this, rhs](Stream& stream) noexcept(firstCallNoexcept) {
+                return lhs.apply(stream).flatMap([&rhs, &stream](T&& body) noexcept(Parser<Rhs>::nothrow) {
+                    return rhs.apply(stream).map([mvBody = std::move(body)](auto const& _) {
+                        return mvBody;
+                    });
                 });
             });
-        });
+        } else {
+            return Parser<T>::make([lhs = *this, rhs](Stream& stream, auto& ctx) noexcept(firstCallNoexcept) {
+                return lhs.apply(stream, ctx).flatMap([&rhs, &stream, &ctx](T body) noexcept(Parser<Rhs>::nothrow) {
+                    return rhs.apply(stream, ctx).map([mvBody = std::move(body)](auto const& _) {
+                        return mvBody;
+                    });
+                });
+            });
+        }
     }
 
 
@@ -662,7 +957,7 @@ public:
      * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
     template <std::invocable<T> ListFn>
-    friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
+    constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         return Parser<std::invoke_result_t<ListFn, T>>::make([lhs, fn](Stream& str) {
            return lhs.apply(str).map(fn);
         });
@@ -673,12 +968,12 @@ public:
      * @def `|` :: Parser<A> -> Parser<A> -> Parser<A>
      */
     template <typename Rhs>
-    auto operator|(Parser<T, Rhs> rhs) const noexcept {
-        return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
+    constexpr auto operator|(Parser<T, Ctx, Rhs> rhs) const noexcept {
+        return Parser<T>::make([lhs = *this, rhs](Stream& stream, auto& ctx) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream, ctx).flatMapError([&](details::ParsingError const& firstError) {
                 stream.restorePos(backup);
-                return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
+                return rhs.apply(stream, ctx).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
                             "Or error: " + firstError.description + ", " + secondError.description
                                  , std::max(firstError.pos, secondError.pos));
@@ -695,7 +990,7 @@ public:
     /**
      * @def maybe :: Parser<A> -> Parser<std::optional<B>>
      */
-    auto maybe() const noexcept {
+    constexpr auto maybe() const noexcept {
         return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream) {
             auto backup = stream.pos();
             return parser.apply(stream).map([](T t) {
@@ -715,7 +1010,7 @@ public:
     /**
      * @def maybeOr :: Parser<A> -> Parser<A>
      */
-    auto maybeOr(T const& defaultValue) const noexcept {
+    constexpr auto maybeOr(T const& defaultValue) const noexcept {
         return Parser<T>::make([parser = *this, defaultValue](Stream& stream) {
             auto backup = stream.pos();
             return parser.apply(stream).flatMapError([&stream, &backup, &defaultValue](details::ParsingError const& error) {
@@ -731,7 +1026,7 @@ public:
      */
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION>
             requires(!std::is_same_v<T, Drop>)
-    auto repeat() const noexcept {
+    constexpr auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>>;
         return P::make([value = *this](Stream& stream) {
@@ -761,7 +1056,7 @@ public:
      */
     template <size_t maxIteration = MAX_ITERATION>
             requires(std::is_same_v<T, Drop>)
-    auto repeat() const noexcept {
+    constexpr auto repeat() const noexcept {
         using P = Parser<Drop>;
         return P::make([value = *this](Stream& stream) noexcept(nothrow) {
             size_t iteration = 0;
@@ -786,7 +1081,7 @@ public:
      */
     template <size_t reserve = 0, size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(!std::is_same_v<T, Drop>)
-    auto repeat(Delimiter tDelimiter) const noexcept {
+    constexpr auto repeat(Delimiter tDelimiter) const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>>;
         constexpr bool noexceptP = nothrow && Delimiter::nothrow;
@@ -823,7 +1118,7 @@ public:
      */
     template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(std::is_same_v<T, Drop>)
-    auto repeat(Delimiter tDelimiter) const noexcept {
+    constexpr auto repeat(Delimiter tDelimiter) const noexcept {
         using P = Parser<Drop>;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream) {
             size_t iteration = 0;
@@ -853,7 +1148,7 @@ public:
      */
     template <std::predicate<T const&> Fn>
             requires (!std::predicate<T const&, Stream&>)
-    auto cond(Fn test) const noexcept {
+    constexpr auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
            return parser.apply(stream).flatMap([&test, &stream](T t) {
                if (test(t)) {
@@ -869,7 +1164,7 @@ public:
      * @def cond :: Parser<A> -> Parser<A>
      */
     template <std::predicate<T const&, Stream&> Fn>
-    auto cond(Fn test) const noexcept {
+    constexpr auto cond(Fn test) const noexcept {
         return Parser<T>::make([parser = *this, test](Stream& stream) {
            return parser.apply(stream).flatMap([&test, &stream](T t) {
                if (test(t, stream)) {
@@ -884,7 +1179,7 @@ public:
     /**
      * @def Drop :: Parser<A> -> Parser<Drop>
      */
-    auto drop() const noexcept {
+    constexpr auto drop() const noexcept {
         return Parser<Drop>::make([p = *this](Stream& s) {
             return p.apply(s).map([](auto &&) {
                 return Drop{};
@@ -895,7 +1190,7 @@ public:
     /**
      * @def endOfStream :: Parser<A> -> Parser<A>
      */
-    auto endOfStream() const noexcept {
+    constexpr auto endOfStream() const noexcept {
         return cond([](T const& t, Stream& s) {
             return s.eos();
         });
@@ -904,7 +1199,7 @@ public:
     /**
      * @def mustConsume :: Parser<A> -> Parser<A>
      */
-    auto mustConsume() const noexcept {
+    constexpr auto mustConsume() const noexcept {
         return make([p = *this](Stream& s) {
             auto pos = s.pos();
             return p.apply(s).flatMap([pos, &s](auto &&t) {
@@ -919,7 +1214,7 @@ public:
 
 
     template <typename Fn>
-    auto flatMap(Fn fn) const noexcept(std::is_nothrow_invocable_v<Fn, T const&>) {
+    constexpr auto flatMap(Fn fn) const noexcept(std::is_nothrow_invocable_v<Fn, T const&>) {
         return make_parser([parser = *this, fn](Stream& stream) {
             return parser.apply(stream).flatMap([fn, &stream](T const& t) {
                 return fn(t).apply(stream);
@@ -930,28 +1225,36 @@ public:
     /**
      * @def toCommonType :: Parser<A, Fn> -> Parser'<A>
      */
-    auto toCommonType() const noexcept {
-        details::StdFunction<T> f = [fn = m_fn](Stream& stream) {
-            return std::invoke(fn, stream);
-        };
+    constexpr auto toCommonType() const noexcept {
+        if constexpr (nocontext) {
+            details::StdFunction<T> f = [fn = *this](Stream& stream) {
+                return std::invoke(fn, stream);
+            };
 
-        return Parser<T>(f);
+            return Parser<T>(f);
+        } else {
+            details::StdFunction<T, Ctx> f = [fn = *this](Stream& stream, auto& ctx) {
+                return std::invoke(fn, stream, ctx);
+            };
+
+            return Parser<T, Ctx>(f);
+        }
     }
 
-    static Result makeError(details::ParsingError error) noexcept {
+    static constexpr Result makeError(details::ParsingError error) noexcept {
         return Result{error};
     }
 
-    static Result makeError(size_t pos) noexcept {
+    static constexpr Result makeError(size_t pos) noexcept {
         return Result{details::ParsingError{"", pos}};
     }
 
 #ifdef PRS_DISABLE_ERROR_LOG
-    static Result makeError(std::string_view desc, size_t pos) noexcept {
+    static constexpr Result makeError(std::string_view desc, size_t pos) noexcept {
         return Result{details::ParsingError{"", pos}};
     }
 #else
-    static Result makeError(
+    static constexpr Result makeError(
             std::string desc,
             size_t pos,
             details::SourceLocation source = details::SourceLocation::current()) noexcept {
@@ -961,14 +1264,8 @@ public:
 
     template <typename U = T>
         requires(std::convertible_to<U, T>)
-    static Result data(U&& t) noexcept(std::is_nothrow_convertible_v<U, T>) {
+    static constexpr Result data(U&& t) noexcept(std::is_nothrow_convertible_v<U, T>) {
         return Result{std::forward<U>(t)};
-    }
-
-    static auto alwaysError() noexcept {
-        return make([](Stream& s) {
-           return makeError("Always error", s.pos());
-        });
     }
 private:
     StoredFn m_fn;
@@ -1138,9 +1435,13 @@ inline auto fail(std::string const& text) noexcept {
 namespace prs {
 
 
-template <typename Fn>
+template <typename Ctx = VoidContext, typename Fn>
 auto make_parser(Fn &&f) noexcept {
-    return Parser<typename std::invoke_result_t<Fn, Stream&>::Body>::make(std::forward<Fn>(f));
+    using T = typename std::conditional_t<std::is_invocable_v<Fn, Stream&>
+            , std::invoke_result<Fn, Stream&>
+            , std::invoke_result<Fn, Stream&, Ctx&>>::type::Body;
+
+    return Parser<T, Ctx>::make(std::forward<Fn>(f));
 }
 
 namespace details {
@@ -1248,7 +1549,7 @@ inline auto anyChar() noexcept {
         }
     };
 
-    return prs::make_parser(p);
+    return make_parser(p);
 }
 
 /**

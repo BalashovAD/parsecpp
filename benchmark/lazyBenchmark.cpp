@@ -31,12 +31,12 @@ Parser<Drop> bracesCacheDrop() noexcept {
         .cond(checkBraces).drop().repeat<>()).toCommonType();
 }
 
-auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<5>() >> success())) {
-
-    return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<5>() >> success());
-}
+//auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
+//        .cond(checkBraces).repeat<5>() >> success())) {
+//
+//    return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
+//        .cond(checkBraces).repeat<5>() >> success());
+//}
 
 template <ParserType P>
 void BM_bracesSuccess(benchmark::State& state, P parser) {
@@ -66,9 +66,9 @@ void BM_bracesFailure(benchmark::State& state, P parser) {
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesLazy, bracesLazy().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCached, bracesCache().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCachedDrop, bracesCacheDrop().endOfStream());
-BENCHMARK_CAPTURE(BM_bracesSuccess, bracesForget, bracesForget().endOfStream());
+//BENCHMARK_CAPTURE(BM_bracesSuccess, bracesForget, bracesForget().endOfStream());
 
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesLazyF, bracesLazy().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedF, bracesCache().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedDropF, bracesCacheDrop().endOfStream());
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesForgetF, bracesForget().endOfStream());
+//BENCHMARK_CAPTURE(BM_bracesFailure, bracesForgetF, bracesForget().endOfStream());
