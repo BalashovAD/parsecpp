@@ -19,7 +19,7 @@ jobs:
         submodules: 'true'
 
     - name: Configure CMake Release
-      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=ON
+      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=OFF
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build_release --config Release
