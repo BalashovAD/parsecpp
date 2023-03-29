@@ -19,7 +19,7 @@ jobs:
         submodules: 'true'
 
     - name: Configure CMake Release
-      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON
+      run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=ON
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build_release --config Release
@@ -53,3 +53,7 @@ jobs:
     - name: Test
       working-directory: ${{github.workspace}}/build_debug/tests
       run: ./unit-tests
+
+    - name: Example quick
+      working-directory: ${{github.workspace}}/build_debug/examples
+      run: ./quick/quick

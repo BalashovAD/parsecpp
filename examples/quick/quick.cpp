@@ -67,11 +67,28 @@ void recursion() {
     });
 }
 
+void contextSimple() {
+    using Ctx = ContextWrapper<char const>;
+    const auto parser = make_parser<Ctx>([](Stream& stream, Ctx& ctx) {
+        return charFrom(get<char>(ctx)).apply(stream);
+    });
+
+    char const c = 'v';
+    Ctx ctx{c};
+    Stream example("vvv");
+    parser(example, ctx).join([](char c) {
+        std::cout << "Context parsed" << std::endl;
+    }, [&example](auto const& error) {
+        std::cout << "Error: " << example.generateErrorText(error) << std::endl;
+    });
+}
+
 int main() {
 
     hello();
     circle();
     recursion();
+    contextSimple();
 
     return 0;
 }

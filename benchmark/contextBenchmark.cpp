@@ -59,6 +59,8 @@ static inline std::string LONG_CHALLENGE = repeatF<8>(std::string{"a"}, [](auto 
 BENCHMARK_CAPTURE(BM_Context, CtxLong8, parserCtxLong, LONG_CHALLENGE);
 BENCHMARK_CAPTURE(BM_Context, EtalonLong8, parserNoCtxLong, LONG_CHALLENGE);
 
+#ifdef ENABLE_HARD_BENCHMARK
+
 static inline auto parserCtxLong12 = repeatF<12>(charFrom('a'), [](auto p) {return ctxCombine(p, p);}).endOfStream();
 static inline auto parserNoCtxLong12 = repeatF<12>(charFrom('a'), [](auto p) {return p >> p;}).endOfStream();
 
@@ -67,3 +69,4 @@ static inline std::string LONG_CHALLENGE12 = repeatF<12>(std::string{"a"}, [](au
 BENCHMARK_CAPTURE(BM_Context, CtxLong12, parserCtxLong12, LONG_CHALLENGE12);
 BENCHMARK_CAPTURE(BM_Context, EtalonLong12, parserNoCtxLong12, LONG_CHALLENGE12);
 
+#endif
