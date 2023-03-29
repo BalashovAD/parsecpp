@@ -169,8 +169,18 @@ constexpr bool containsTypeF() noexcept {
     }
 }
 
-template <ContextType Ctx1, ContextType Ctx2>
+template <ContextType Ctx1, ContextType ...Args>
 struct unionImpl;
+
+template <ContextType Ctx1>
+struct unionImpl<Ctx1> {
+    using Type = Ctx1;
+};
+
+template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
+struct unionImpl<Ctx1, Ctx2, Args...> {
+    using Type = unionImpl<typename unionImpl<Ctx1>::Type, Args...>;
+};
 
 template <ContextType Ctx1>
 struct unionImpl<Ctx1, VoidContext> {
@@ -227,7 +237,7 @@ template <ContextType Ctx, typename T>
 static constexpr bool containsType = details::containsTypeF<Ctx, T>();
 
 
-template <ContextType Ctx1, ContextType Ctx2>
+template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
 using UnionCtx = typename details::unionImpl<Ctx1, Ctx2>::Type;
 
 
