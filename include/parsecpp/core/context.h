@@ -179,7 +179,7 @@ struct unionImpl<Ctx1> {
 
 template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
 struct unionImpl<Ctx1, Ctx2, Args...> {
-    using Type = unionImpl<typename unionImpl<Ctx1>::Type, Args...>;
+    using Type = typename unionImpl<typename unionImpl<Ctx1>::Type, Args...>::Type;
 };
 
 template <ContextType Ctx1>
@@ -237,8 +237,8 @@ template <ContextType Ctx, typename T>
 static constexpr bool containsType = details::containsTypeF<Ctx, T>();
 
 
-template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
-using UnionCtx = typename details::unionImpl<Ctx1, Ctx2>::Type;
+template <ContextType ...Args>
+using UnionCtx = typename details::unionImpl<Args...>::Type;
 
 
 template <typename T, ContextType Ctx>

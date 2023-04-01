@@ -34,14 +34,6 @@ static void BM_Context(benchmark::State& state, Parser const& parser, std::strin
     }
 }
 
-template <size_t pw, typename T, typename Fn>
-auto repeatF(T t, Fn op) noexcept {
-    if constexpr (pw == 0) {
-        return t;
-    } else {
-        return repeatF<pw - 1>(op(t), op);
-    }
-}
 
 static inline std::string_view COMMON_CHALLENGE = "abc abc  abc abc abc abc abcabc abc  abc abc abc abc abcabc abc  abc abc abc abc abcabc abc  abc abc abc abc abc";
 
@@ -54,19 +46,19 @@ BENCHMARK_CAPTURE(BM_Context, Etalon, parserNoCtx, COMMON_CHALLENGE);
 
 #ifdef ENABLE_HARD_BENCHMARK
 
-static inline auto parserNoCtxLong = repeatF<8>(charFrom('a'), [](auto p) {return p >> p;}).endOfStream();
-static inline auto parserCtxLong = repeatF<8>(charFrom('a'), [](auto p) {return ctxCombine(p, p);}).endOfStream();
+static inline auto parserNoCtxLong = details::repeatF<8>(charFrom('a'), [](auto p) {return p >> p;}).endOfStream();
+static inline auto parserCtxLong = details::repeatF<8>(charFrom('a'), [](auto p) {return ctxCombine(p, p);}).endOfStream();
 
-static inline std::string LONG_CHALLENGE = repeatF<8>(std::string{"a"}, [](auto s) {return s + s;});
+static inline std::string LONG_CHALLENGE = details::repeatF<8>(std::string{"a"}, [](auto s) {return s + s;});
 
 BENCHMARK_CAPTURE(BM_Context, CtxLong8, parserCtxLong, LONG_CHALLENGE);
 BENCHMARK_CAPTURE(BM_Context, EtalonLong8, parserNoCtxLong, LONG_CHALLENGE);
 
 
-static inline auto parserCtxLong12 = repeatF<12>(charFrom('a'), [](auto p) {return ctxCombine(p, p);}).endOfStream();
-static inline auto parserNoCtxLong12 = repeatF<12>(charFrom('a'), [](auto p) {return p >> p;}).endOfStream();
+static inline auto parserCtxLong12 = details::repeatF<12>(charFrom('a'), [](auto p) {return ctxCombine(p, p);}).endOfStream();
+static inline auto parserNoCtxLong12 = details::repeatF<12>(charFrom('a'), [](auto p) {return p >> p;}).endOfStream();
 
-static inline std::string LONG_CHALLENGE12 = repeatF<12>(std::string{"a"}, [](auto s) {return s + s;});
+static inline std::string LONG_CHALLENGE12 = details::repeatF<12>(std::string{"a"}, [](auto s) {return s + s;});
 
 BENCHMARK_CAPTURE(BM_Context, CtxLong12, parserCtxLong12, LONG_CHALLENGE12);
 BENCHMARK_CAPTURE(BM_Context, EtalonLong12, parserNoCtxLong12, LONG_CHALLENGE12);

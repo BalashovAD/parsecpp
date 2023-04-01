@@ -1,6 +1,7 @@
 #pragma once
 
 #include <parsecpp/core/parser.h>
+#include <parsecpp/utils/modifier.h>
 #include <parsecpp/utils/cmp.h>
 
 namespace prs::debug {
@@ -50,7 +51,7 @@ public:
         return out.str();
     }
 
-    void addLog(size_t pos, std::string desc) const noexcept {
+    void addLog(size_t pos, std::string desc) noexcept {
         m_callStack.emplace_back(pos, std::move(desc));
     }
 
@@ -70,38 +71,32 @@ public:
     };
 
 private:
-    mutable std::vector<CallInfo> m_callStack;
+    std::vector<CallInfo> m_callStack;
 };
 
+using DebugContext = ContextWrapper<DebugEnvironment>;
 
-class DebugParser {
+template <typename T, typename CtxT = VoidContext>
+class ParserCast {
 public:
-    explicit DebugParser(DebugEnvironment& env) noexcept
-        : m_env(env) {
+    using Ctx = CtxT;
 
+    auto toParser() const noexcept {
+        return make_parser<Ctx>(static_cast<T const&>(*this));
     }
-
-    void addLog(size_t pos, std::string desc) const noexcept {
-        m_env.addLog(pos, std::move(desc));
-    }
-
-    using CallInfo = DebugEnvironment::CallInfo;
-private:
-    DebugEnvironment& m_env;
 };
 
-struct LogPoint : private DebugParser {
+struct LogPoint : public ParserCast<LogPoint, DebugContext> {
 public:
     using P = Parser<Drop>;
 
-    LogPoint(DebugEnvironment& env, std::string const& name) noexcept
-        : DebugParser(env)
-        , m_desc("Point{" + name + "}") {
+    explicit LogPoint(std::string const& name) noexcept
+        : m_desc("Point{" + name + "}") {
 
     }
 
-    P::Result operator()(Stream& stream) const noexcept {
-        addLog(stream.pos(), m_desc);
+    P::Result operator()(Stream& stream, Ctx& ctx) const noexcept {
+        ctx.get().addLog(stream.pos(), m_desc);
         return P::data({});
     }
 private:
@@ -109,67 +104,47 @@ private:
 };
 
 
-inline auto logPoint(DebugEnvironment& env, std::string name) noexcept {
-    return make_parser(LogPoint{env, std::move(name)});
+inline auto logPoint(std::string const& name) noexcept {
+    return LogPoint{name}.toParser();
 }
 
-template <bool onlyError, ParserType ParserA>
-struct ParserWork : private DebugParser {
+template <bool onlyError>
+struct ParserWork {
 public:
-    using Result = typename ParserA::Result;
-    ParserWork(DebugEnvironment& env, ParserA tParser, std::string parserName) noexcept
-        : DebugParser(env)
-        , m_parser(std::move(tParser))
-        , m_parserName(std::move(parserName)) {
+    explicit ParserWork(std::string parserName) noexcept
+        : m_parserName(std::move(parserName)) {
 
     }
 
-    Result operator()(Stream& stream) const noexcept(ParserA::nothrow) {
+    auto operator()(auto& parser, Stream& stream, DebugContext& ctx) const {
         if constexpr (!onlyError) {
-            addLog(stream.pos(), "Before{" + m_parserName + "}");
+            ctx.get().addLog(stream.pos(), "Before{" + m_parserName + "}");
         }
 
-        return m_parser.apply(stream).join([&](auto&& t) {
+        return parser().map([&](auto&& t) {
             if constexpr (!onlyError) {
-                addLog(stream.pos(), "After{" + m_parserName + "}");
+                ctx.get().addLog(stream.pos(), "After{" + m_parserName + "}");
             }
-            return Result{t};
+            return t;
         }, [&](auto &&error) {
-            addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
-            return Result{error};
+            ctx.get().addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
+            return error;
         });
     }
 private:
-    ParserA m_parser;
     std::string m_parserName;
 };
 
 template <ParserType ParserA>
-auto parserWork(DebugEnvironment& env, ParserA tParser, std::string parserName) noexcept {
-    return ParserA::make(ParserWork<false, std::decay_t<ParserA>>{env, std::move(tParser), std::move(parserName)});
+auto parserWork(ParserA parser, std::string parserName) noexcept {
+    return parser * ModifyWithContext<ParserWork<false>, DebugContext>{parserName};
 }
 
 
 template <ParserType ParserA>
-auto parserError(DebugEnvironment& env, ParserA tParser, std::string parserName) noexcept {
-    return ParserA::make(ParserWork<true, std::decay_t<ParserA>>{env, std::move(tParser), std::move(parserName)});
+auto parserError(ParserA parser, std::string parserName) noexcept {
+    return parser * ModifyWithContext<ParserWork<true>, DebugContext>{parserName};
 }
 
 
-template <ParserType P>
-class DebugExecutor {
-public:
-    template <typename Fn>
-    DebugExecutor(std::unique_ptr<DebugEnvironment> spEnv, Fn&& fn) noexcept(std::is_nothrow_invocable_v<Fn, DebugEnvironment&>) {
-
-    }
-private:
-    std::unique_ptr<DebugEnvironment> m_spEnv;
-    P m_parser;
-};
-//
-//template <typename Fn>
-//auto makeDebug(Fn&& f) noexcept(std::is_nothrow_invocable_v<Fn, DebugEnvironment&>) {
-//    return []
-//}
 }
