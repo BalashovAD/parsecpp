@@ -604,7 +604,7 @@ struct TypeWrapperB {
 
 
 template <typename T>
-using CtxType = TypeWrapperB<T, std::remove_const_t<T>>;
+using CtxType = TypeWrapperB<T, std::decay_t<T>>;
 
 template <typename T, typename Name>
 using NamedType = TypeWrapperB<T, Name>;
@@ -617,7 +617,7 @@ struct ConvertToTypeWrapperT {
 
 template <typename T, typename K>
 struct ConvertToTypeWrapperT<TypeWrapperB<T, K>> {
-    using type = TypeWrapperB<T, K>;
+    using type = TypeWrapperB<T, std::decay_t<K>>;
 };
 
 template <typename T>
@@ -642,6 +642,33 @@ class ContextWrapperT<TypeWrapperB<T, K>> {
 public:
     using Type = T;
     using Key = K;
+    using TypeWrapper = TypeWrapperB<T, K>;
+
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 1;
+
+    explicit ContextWrapperT(T value = {}) noexcept
+        : m_value(std::move(value)) {
+
+    }
+
+    Type& get() noexcept {
+        return m_value;
+    }
+
+    Type const& get() const noexcept {
+        return m_value;
+    }
+private:
+    T m_value{};
+};
+
+template <typename T, typename K>
+class ContextWrapperT<TypeWrapperB<T&, K>> {
+public:
+    using Type = T;
+    using Key = K;
+    using TypeWrapper = TypeWrapperB<T&, K>;
 
     static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
@@ -668,6 +695,30 @@ class ContextWrapperT<TypeWrapperB<T const, K>> {
 public:
     using Type = T;
     using Key = K;
+    using TypeWrapper = TypeWrapperB<T const, K>;
+
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 1;
+
+    explicit ContextWrapperT(T const& value = T{}) noexcept
+        : m_value(value) {
+
+    }
+
+    Type const& get() const noexcept {
+        return m_value;
+    }
+private:
+    T m_value{};
+};
+
+
+template <typename T, typename K>
+class ContextWrapperT<TypeWrapperB<T const&, K>> {
+public:
+    using Type = T;
+    using Key = K;
+    using TypeWrapper = TypeWrapperB<T const&, K>;
 
     static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
@@ -696,8 +747,8 @@ public:
 
     template <typename ...Args>
         requires(sizeof...(Args) == size)
-    explicit ContextWrapperT(Args& ...args) noexcept
-        : ContextWrapperT<ConvertToTypeWrapper<Args>>(args)... {
+    explicit ContextWrapperT(Args&& ...args) noexcept
+        : ContextWrapperT<Types>(std::forward<Args>(args))... {
 
     }
 };
@@ -810,7 +861,7 @@ struct GetTypeWrapperT {
 
 template <typename CtxType, typename T>
 struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
-    using Type = typename CtxType::Type;
+    using Type = typename CtxType::TypeWrapper;
 };
 
 template <typename Ctx, typename T>
@@ -834,8 +885,12 @@ using UnionCtx = typename details::unionImpl<Args...>::Type;
 template <typename T, ContextType Ctx>
     requires (containsType<Ctx, T>)
 decltype(auto) get(Ctx& ctx) noexcept {
-    using TypeWrapper = details::GetTypeWrapper<Ctx, T>;
-    return static_cast<ContextWrapper<TypeWrapper>>(ctx).get();
+    if constexpr (Ctx::size == 1) {
+        return ctx.get();
+    } else {
+        using TypeWrapper = details::GetTypeWrapper<Ctx, T>;
+        return static_cast<ContextWrapper<TypeWrapper>>(ctx).get();
+    }
 }
 
 
@@ -965,7 +1020,7 @@ public:
 
 
     /**
-     * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
+     * @def `<<` :: Parser<A, CtxA> -> Parser<B, CtxB> -> Parser<A, CtxA & CtxB>
      */
     template <typename B, typename CtxB, typename Rhs>
         requires (!IsVoidCtx<UnionCtx<Ctx, CtxB>>)
@@ -986,6 +1041,20 @@ public:
      * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
     template <std::invocable<T> ListFn>
+        requires(nocontext)
+    constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
+        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
+           return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+
+    /*
+     * <$>, fmap operator
+     * @def `>>=` :: Parser<A, Ctx> -> (A -> B) -> Parser<B, Ctx>
+     */
+    template <std::invocable<T> ListFn>
+        requires(!nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
            return lhs.apply(stream, ctx).map(fn);

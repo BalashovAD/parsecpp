@@ -10,7 +10,8 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 - [ ] Add guide how to write the fastest parsers
 - [x] Add Drop control class for performance optimizations
 - [x] Disable error log by flag
-- [ ] Add call stack for debug purpose
+- [x] Add call stack for debug purpose
+- [x] Add custom context for parsing
 
 ## Requirements
 
@@ -102,7 +103,7 @@ the generator cannot use `decltype(auto)` for return type. So, usually, the gene
 This is an improved version of `lazyCached` without type erasing.
 `LazyForget` only depends on the parser result type and doesn't create a recursive type. 
 You need to specify return type manually with `decltype(X)`, where `X` is value in `return` with changed `lazyForget<R>(f)` to
-`std::declval<Parser<R, LazyForget<R>>>()`.
+`std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
 This code is slightly faster when `lazyCached`, but code looks harder to read and edit. 
 
 
@@ -147,7 +148,7 @@ Parser<Unit> bracesCache() noexcept {
         .cond(checkBraces).repeat<5>() >> success()).toCommonType();
 }
 
-auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
+auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success())) {
 
     return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
@@ -157,27 +158,36 @@ auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::d
 
 Benchmark result:
 ```
-BM_bracesSuccess/bracesLazy_median           756 ns
-BM_bracesSuccess/bracesCached_median         439 ns
-BM_bracesSuccess/bracesForget_median         418 ns
-
-BM_bracesFailure/bracesLazyF_median          494 ns
-BM_bracesFailure/bracesCachedF_median        279 ns
-BM_bracesFailure/bracesForgetF_median        270 ns
+BM_bracesSuccess/bracesLazy_median               784 ns
+BM_bracesSuccess/bracesCached_median             433 ns
+BM_bracesSuccess/bracesCachedDrop_median         312 ns
+BM_bracesSuccess/bracesForget_median             429 ns
+BM_bracesFailure/bracesLazyF_median              499 ns
+BM_bracesFailure/bracesCachedF_median            273 ns
+BM_bracesFailure/bracesCachedDropF_median        197 ns
+BM_bracesFailure/bracesForgetF_median            268 ns
 ```
 
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
 
 ## Build-in operators
 
-In the following text, `Parser<A>` refers to a `prs::Parser<A, Fn>` for any `Fn`.   
+In the following text, `Parser<A>` refers to a `prs::Parser<A, VoidContext, Fn>` for any `Fn`.   
 The second template argument is an implementation trick that doesn't change the category. 
-`Parser'<A>` is simply shorthand for `prs::Parser<A> := prs::Parser<A, StdFunction>`, which is a common type for all `Parser<A>`.  
-`Drop` is special class, and we assume that `A != Drop`.
+`Parser'<A>` is simply shorthand for `prs::Parser<A> := prs::Parser<A, VoidContext, StdFunction>`, 
+which is a common type for all `Parser<A>`. `Parser'<A, Ctx>` is shorthand for `prs::Parser<A, Ctx>`, 
+which is a common type for all `Parser<A, Ctx>`.  
+`Drop` is special class, and we assume that `A != Drop`.  
+
+### Context
+// TODO 
+Context type `CtxA & CtxB` is shorthand for `UnionCtx<CtxA, CtxB>`. 
+In opposite to common `union`, `UnionCtx` depends on the argument sequence. 
+For example, `ContextWrapper<char, unsigned> := UnionCtx<char, unsigned> != UnionCtx<unsigned, char> =: ContextWrapper<unsigned, char>` 
 
 ### Converting to a Common Type
 ```
-toCommonType :: Parser<A> -> Parser'<A>
+toCommonType :: Parser<A, Ctx> -> Parser'<A, Ctx>
 ```
 This function is typically used to store a parser in a class or for forward declaration of recursion parsers. 
 However, it may reduce performance because it uses `std::function` for type erasing.
@@ -189,8 +199,8 @@ prs::Parser<A> p = parserA.toCommonType();
 ```
 ### Forget op `>>` and `<<`
 ```
-(>>) :: Parser<A> -> Parser<B> -> Parser<B>
-(<<) :: Parser<A> -> Parser<B> -> Parser<A>
+(>>) :: Parser<A, CtxA> -> Parser<B, CtxB> -> Parser<B, CtxA & CtxB>
+(<<) :: Parser<A, CtxA> -> Parser<B, CtxB> -> Parser<A, CtxA & CtxB>
 ```
 Sequencing operators, such as the semicolon, compose two actions and discard any value produced by the first(second).
 
@@ -203,7 +213,7 @@ auto between = charFrom('*') >> letters() << charFrom('*'); // Parser<std::strin
 
 ### Or `|`
 ```
-(|) :: Parser<A> -> Parser<A> -> Parser<A>
+(|) :: Parser<A, CtxA> -> Parser<A, CtxB> -> Parser<A, CtxA & CtxB>
 ```
 Opposite to Haskell Parsec library, the or operator is always `LL(inf)`. Now library doesn't support `LL(1)`.  
 Try to parse using the first parser, if that fails, rollback position and try with the second one.
@@ -218,7 +228,7 @@ auto parser = literal("A") | literal('AB'); // Parser<std::string_view>
 
 ### Repeat
 ```
-repeat :: Parser<A> -> Parser<Vector<A>>
+repeat :: Parser<A, Ctx> -> Parser<Vector<A>, Ctx>
 ```
 Be careful with parsers that can parse successfully without consuming the stream.
 
@@ -233,7 +243,7 @@ auto wrongUseRepeat = spaces().repeat(); // spaces always return Success, even n
 
 ### Maybe
 ```
-maybe :: Parser<A> -> Parser<std::optional<A>>
+maybe :: Parser<A, Ctx> -> Parser<std::optional<A>, Ctx>
 ```
 This parser always returns Success. Rollback stream if it cannot parse `A`.
 
@@ -245,7 +255,7 @@ auto parser = charFrom('A').maybe(); // Parser<std::optional<char>>
 
 ### endOfStream
 ```
-endOfStream :: Parser<A> -> Parser<A>
+endOfStream :: Parser<A, Ctx> -> Parser<A, Ctx>
 ```
 
 This parser requires that the entire stream be consumed for Success.
@@ -287,6 +297,12 @@ auto parser = charFrom('a', 'b', 'c').drop().repeat(); // Parser<Drop>
 ```
 
 ### Debug
-// WIP  
-For debug purpose use `parsecpp/common/debug.h`. 
+For debug purpose use namespace `debug::`, see `parsecpp/common/debug.h` and `tests/common/debugTest.cpp`.
+
+```
+debug::DebugContext debugContext;
+auto parser = spaces() >> debug::parserWork(number<int>(), "Int") << spaces();
+parser(steam, debugContext);
+debugContext.get() // <-- Call stack
+```
 

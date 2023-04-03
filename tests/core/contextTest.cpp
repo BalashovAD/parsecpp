@@ -1,17 +1,17 @@
 #include "../testHelper.h"
 
 TEST(Context, Ctor) {
-    using CI = ContextWrapper<int>;
-    using CS = ContextWrapper<std::string>;
+    using CI = ContextWrapper<int&>;
+    using CS = ContextWrapper<std::string const&>;
     int i;
     std::string s;
 
     using CU = UnionCtx<CI, CS>;
-    static_assert(std::is_same_v<CU, ContextWrapper<int, std::string>>);
+    static_assert(std::is_same_v<CU, ContextWrapper<int&, std::string const&>>);
     CU t{i, s};
 
     auto& li = get<int>(t);
-    auto& ls = get<std::string>(t);
+    auto const& ls = get<std::string>(t);
 
     EXPECT_EQ(&li, &i);
     EXPECT_EQ(&ls, &s);
@@ -47,10 +47,14 @@ TEST(Context, Parser) {
         return charFrom(get<char>(ctx)).apply(stream);
     });
 
-    char const c = 'b';
-    Ctx ctx{c};
+    Ctx ctx{'b'};
 
     success_parsing(ctxParser, 'b', "ba", "a", ctx);
+
+    char c = 'b';
+    Ctx ctx2{c};
+    success_parsing(ctxParser, 'b', "ba", "a", ctx2);
+
     failed_parsing(ctxParser, 0, "ab", ctx);
 }
 
@@ -71,7 +75,7 @@ TEST(Context, OpForget) {
 
 TEST(Context, OpForget2) {
     using CtxC = ContextWrapper<char const>;
-    using CtxI = ContextWrapper<unsigned>;
+    using CtxI = ContextWrapper<unsigned&>;
     const auto ctxParser = make_parser<CtxC>([](Stream& stream, CtxC& ctx) {
         return charFrom(get<char>(ctx)).apply(stream);
     });

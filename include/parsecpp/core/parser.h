@@ -127,7 +127,7 @@ public:
 
 
     /**
-     * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
+     * @def `<<` :: Parser<A, CtxA> -> Parser<B, CtxB> -> Parser<A, CtxA & CtxB>
      */
     template <typename B, typename CtxB, typename Rhs>
         requires (!IsVoidCtx<UnionCtx<Ctx, CtxB>>)
@@ -148,6 +148,20 @@ public:
      * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
     template <std::invocable<T> ListFn>
+        requires(nocontext)
+    constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
+        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
+           return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+
+    /*
+     * <$>, fmap operator
+     * @def `>>=` :: Parser<A, Ctx> -> (A -> B) -> Parser<B, Ctx>
+     */
+    template <std::invocable<T> ListFn>
+        requires(!nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
            return lhs.apply(stream, ctx).map(fn);

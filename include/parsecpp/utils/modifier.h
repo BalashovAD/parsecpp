@@ -10,7 +10,7 @@ public:
     virtual details::ResultType<T> operator()() = 0;
 };
 
-template <ParserType Parser, typename = std::enable_if_t<Parser::nocontext, std::true_type>>
+template <ParserType Parser>
 class ModifyCaller : public ModifyCallerI<parser_result_t<Parser>> {
 public:
     ModifyCaller(Parser const& p, Stream& s) noexcept
@@ -26,11 +26,10 @@ private:
 };
 
 
-template <ParserType Parser>
-class ModifyCaller<Parser, std::false_type> : public ModifyCallerI<parser_result_t<Parser>> {
+template <ParserType Parser, ContextType StoredCtx>
+class ModifyCallerCtx : public ModifyCallerI<parser_result_t<Parser>> {
 public:
-    using Ctx = parser_ctx_t<Parser>;
-    ModifyCaller(Parser const& p, Stream& s, Ctx& ctx) noexcept
+    ModifyCallerCtx(Parser const& p, Stream& s, StoredCtx& ctx) noexcept
         : m_parser(p)
         , m_stream(s)
         , m_ctx(ctx) {
@@ -43,7 +42,7 @@ public:
 private:
     Parser const& m_parser;
     Stream& m_stream;
-    Ctx& m_ctx;
+    StoredCtx& m_ctx;
 };
 
 template <typename ModifierClass, typename Ctx>
@@ -79,8 +78,8 @@ auto operator*(ParserA parserA, Modify modifier) noexcept {
     using Ctx = parser_ctx_t<ParserA>;
     return make_parser<Ctx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
-        ModifyCaller p{parser, stream, ctx};
-        if constexpr (std::is_invocable_v<Modify, ModifyCaller<ParserA>&, Stream&>) {
+        ModifyCallerCtx p{parser, stream, ctx};
+        if constexpr (std::is_invocable_v<Modify, ModifyCallerI<parser_result_t<ParserA>>&, Stream&>) {
             return mod(p, stream);
         } else {
             return mod(p, stream, ctx);

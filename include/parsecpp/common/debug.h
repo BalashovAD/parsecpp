@@ -8,7 +8,6 @@ namespace prs::debug {
 
 class DebugParser;
 
-//template <bool enable = true>
 class DebugEnvironment {
 public:
     struct PrintEOSHelper {
