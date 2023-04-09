@@ -399,7 +399,6 @@ constexpr decltype(auto) repeatF(T t, Fn op) noexcept {
 
 namespace prs {
 
-
 template <typename T, typename Error>
     requires(!std::same_as<std::decay_t<T>, std::decay_t<Error>>)
 class Expected {
@@ -514,7 +513,7 @@ public:
     auto map(OnSuccess onSuccess) &&
                     noexcept(map_move_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::invoke_result_t<OnSuccess, T&&>;
         return isError() ? Expected<Result, Error>{std::move(m_error)}
                 : Expected<Result, Error>{onSuccess(std::move(m_data))};
     }
@@ -583,6 +582,7 @@ private:
     };
 };
 
+
 }
 // #include <parsecpp/utils/funcHelper.h>
 
@@ -613,16 +613,16 @@ using NamedType = TypeWrapperB<T, Name>;
 
 template <typename T>
 struct ConvertToTypeWrapperT {
-    using type = CtxType<T>;
+    using Type = CtxType<T>;
 };
 
 template <typename T, typename K>
 struct ConvertToTypeWrapperT<TypeWrapperB<T, K>> {
-    using type = TypeWrapperB<T, std::decay_t<K>>;
+    using Type = TypeWrapperB<T, std::decay_t<K>>;
 };
 
 template <typename T>
-using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::type;
+using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::Type;
 
 
 // Context wrapper
@@ -648,7 +648,7 @@ public:
     static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
 
-    explicit ContextWrapperT(T value = {}) noexcept
+    explicit ContextWrapperT(T value = T{}) noexcept
         : m_value(std::move(value)) {
 
     }
@@ -752,6 +752,8 @@ public:
         : ContextWrapperT<Types>(std::forward<Args>(args))... {
 
     }
+
+    explicit ContextWrapperT() noexcept = default;
 };
 
 // utils
@@ -811,6 +813,23 @@ constexpr bool containsTypeF() noexcept {
     }
 }
 
+
+template <typename Ctx, typename T>
+struct GetTypeWrapperT {
+    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
+};
+
+template <typename CtxType, typename T>
+struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
+    using Type = CtxType;
+};
+
+
+template <typename Ctx, typename T>
+        requires(containsTypeF<Ctx, T>())
+using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
+
+
 template <ContextType Ctx1, ContextType ...Args>
 struct unionImpl;
 
@@ -821,7 +840,7 @@ struct unionImpl<Ctx1> {
 
 template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
 struct unionImpl<Ctx1, Ctx2, Args...> {
-    using Type = typename unionImpl<typename unionImpl<Ctx1>::Type, Args...>::Type;
+    using Type = typename unionImpl<typename unionImpl<Ctx1, Ctx2>::Type, Args...>::Type;
 };
 
 template <ContextType Ctx1>
@@ -832,15 +851,10 @@ struct unionImpl<Ctx1, VoidContext> {
 template <ContextType Ctx1, typename T>
     requires (containsTypeF<Ctx1, T>())
 struct unionImpl<Ctx1, details::ContextWrapperT<T>> {
+    static_assert(std::is_same_v<typename GetTypeWrapper<Ctx1, T>::Type, typename ConvertToTypeWrapper<T>::Type>,
+            "Use the same key type for different value types. Use details::NamedType to split types.");
     using Type = Ctx1;
 };
-
-template <typename T1, typename T2>
-    requires (!std::is_same_v<T1, T2>)
-struct unionImpl<details::ContextWrapperT<T1>, details::ContextWrapperT<T2>> {
-    using Type = ContextWrapper<T1, T2>;
-};
-
 
 template <typename ...Args, typename T>
     requires (!containsTypeF<ContextWrapperT<Args...>, T>())
@@ -849,25 +863,10 @@ struct unionImpl<ContextWrapperT<Args...>, details::ContextWrapperT<T>> {
 };
 
 
-template <typename Ctx1, typename Head, typename ...Args>
-struct unionImpl<Ctx1, ContextWrapperT<Head, Args...>> {
-    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Args...>>::Type;
+template <typename Ctx1, typename Head, typename ...Tail>
+struct unionImpl<Ctx1, ContextWrapperT<Head, Tail...>> {
+    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Tail...>>::Type;
 };
-
-
-template <typename Ctx, typename T>
-struct GetTypeWrapperT {
-    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
-};
-
-template <typename CtxType, typename T>
-struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
-    using Type = typename CtxType::TypeWrapper;
-};
-
-template <typename Ctx, typename T>
-    requires(containsTypeF<Ctx, T>())
-using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
 
 }
 
@@ -973,6 +972,13 @@ public:
     template <typename Context>
     constexpr Result apply(Stream& stream, Context& ctx) const noexcept(nothrow) {
         return operator()(stream, ctx);
+    }
+
+
+    template <typename ...Args>
+        requires(std::is_constructible_v<Ctx, Args...>)
+    static Ctx makeCtx(Args&& ...args) noexcept(std::is_nothrow_constructible_v<Ctx, Args...>) {
+        return Ctx{std::forward<Args>(args)...};
     }
 
     /**
@@ -1631,7 +1637,7 @@ auto lazyForgetCtx(Fn const& f) noexcept {
 namespace prs::details {
 
 template <typename T, typename First, typename ...Args>
-bool cmpAnyOf(T const& t, First &&f, Args &&...args) noexcept {
+constexpr bool cmpAnyOf(T const& t, First &&f, Args &&...args) noexcept {
     if constexpr (sizeof...(args) > 0) {
         return f == t || cmpAnyOf(t, std::forward<Args>(args)...);
     } else {
@@ -1754,7 +1760,7 @@ auto concat(Args &&...args) noexcept {
 }
 
 template <typename Fn>
-auto satisfy(Fn&& tTest) noexcept {
+constexpr auto satisfy(Fn&& tTest) noexcept {
     return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
         if (auto c = stream.checkFirst(test); c != 0) {
             return Parser<char>::data(c);
@@ -1939,7 +1945,7 @@ auto searchText(std::string const& searchPattern) noexcept {
 }
 
 template <LeftCmpWith<char> ...Args>
-auto charFrom(Args ...chars) noexcept {
+constexpr auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
         return details::cmpAnyOf(c, chars...);
     });
@@ -2328,6 +2334,52 @@ auto inline hitCounter() noexcept {
 }
 
 }
+// #include <parsecpp/utils/finally.h>
+
+
+#include <concepts>
+#include <utility>
+
+
+namespace prs {
+
+template <std::invocable Fn>
+class Finally {
+public:
+    template <typename F>
+        requires(std::is_constructible_v<Fn, F>)
+    explicit Finally(F&& fn) noexcept(std::is_nothrow_constructible_v<Fn, F>)
+        : m_fn(std::forward<F>(fn)) {
+
+    }
+
+    Finally(Finally const&) = delete;
+
+    Finally(Finally&& rhs) noexcept(std::is_nothrow_move_assignable_v<Fn>)
+        : m_own(std::exchange(rhs.m_own, false))
+        , m_fn(std::move(rhs.m_fn)) {
+    }
+
+    Finally& operator=(Finally&&) = delete;
+
+    void release() noexcept {
+        m_own = false;
+    }
+
+    ~Finally() {
+        if (m_own) {
+            m_fn();
+        }
+    }
+private:
+    bool m_own = true;
+    Fn m_fn;
+};
+
+template <typename Fn>
+Finally(Fn) -> Finally<std::decay_t<Fn>>;
+
+}
 
 // #include <parsecpp/common/debug.h>
 
@@ -2386,6 +2438,11 @@ private:
 template <typename ModifierClass, typename Ctx>
 class ModifyWithContext {
 public:
+    explicit ModifyWithContext(ModifierClass fn) noexcept(std::is_nothrow_move_constructible_v<ModifierClass>)
+        : m_modifier(std::move(fn)) {
+
+    }
+
     template <typename ...Args>
     explicit ModifyWithContext(Args&& ...args) noexcept(std::is_nothrow_constructible_v<ModifierClass, Args...>)
         : m_modifier(std::forward<Args>(args)...) {
@@ -2397,6 +2454,12 @@ public:
     }
 private:
     ModifierClass m_modifier;
+};
+
+
+template <typename Modifier>
+struct ModifierTrait {
+    using Ctx = VoidContext;
 };
 
 
@@ -2441,6 +2504,35 @@ auto operator*(ParserA parserA, ModifyWithContext<Modify, Ctx> modifier) noexcep
     });
 }
 
+template <ParserType ParserA, typename Modify>
+    requires (!IsVoidCtx<typename ModifierTrait<Modify>::Ctx> && ParserA::nocontext)
+auto operator*(ParserA parserA, Modify modifier) noexcept {
+    using Ctx = typename ModifierTrait<Modify>::Ctx;
+    using UCtx = UnionCtx<parser_ctx_t<ParserA>, Ctx>;
+    return make_parser<UCtx>(
+            [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
+        if constexpr (ParserA::nocontext) {
+            ModifyCaller p{parser, stream};
+            return mod(p, stream, ctx);
+        } else {
+            ModifyCaller p{parser, stream, ctx};
+            return mod(p, stream, ctx);
+        }
+    });
+}
+
+
+/*
+ * Priority for operator*
+ * a `op` b * mod === a `op` (b * mod)
+ * a `op` b *= mod === (a `op` b) * mod
+ * forall `op` != >>=
+ */
+template <ParserType ParserA, typename Modify>
+auto operator*=(ParserA parserA, Modify modify) noexcept {
+    return parserA * modify;
+}
+
 }
 // #include <parsecpp/utils/cmp.h>
 
@@ -2453,27 +2545,23 @@ class DebugEnvironment {
 public:
     struct PrintEOSHelper {
     public:
-        static constexpr char EOS_SYMBOL = '\0';
+        static constexpr std::string_view EOS = "_EOS_";
 
-        PrintEOSHelper(std::string_view full, size_t pos) noexcept {
-            if (full.size() > pos) {
-                m_symbol = full[pos];
+        PrintEOSHelper(std::string_view full, size_t startPos, size_t endPos) noexcept {
+            if (full.size() > startPos) {
+                m_str = full.substr(startPos, std::max<unsigned>(endPos - startPos, 1));
             } else {
-                m_symbol = EOS_SYMBOL;
+                m_str = EOS;
             }
         }
 
         friend std::ostream& operator<<(std::ostream& os, PrintEOSHelper helper) noexcept {
-            if (helper.m_symbol == EOS_SYMBOL) {
-                os << "_EOS_";
-            } else {
-                os << helper.m_symbol;
-            }
+            os << helper.m_str;
             return os;
         }
 
     private:
-        char m_symbol = EOS_SYMBOL;
+        std::string_view m_str;
     };
 
     DebugEnvironment() noexcept = default;
@@ -2483,16 +2571,28 @@ public:
         out << "Parse '" << stream.full() << "'\n";
         auto step = 0u;
         for (auto const& callInfo : m_callStack) {
-            out << step++ << ". pos: " << callInfo.pos
-                << "(" << PrintEOSHelper(stream.full(), callInfo.pos) << ")"
-                << " desc: " << callInfo.desc << "\n";
+            out << step++ << ". ";
+            for (auto i = 0u; i != callInfo.level; ++i) {
+                out << ">";
+            }
+            out << "pos: " << callInfo.end
+                << "(" << PrintEOSHelper(stream.full(), callInfo.start, callInfo.end) << ")"
+                << ": " << callInfo.desc << "\n";
         }
 
         return out.str();
     }
 
     void addLog(size_t pos, std::string desc) noexcept {
-        m_callStack.emplace_back(pos, std::move(desc));
+        m_callStack.emplace_back(pos, pos, std::move(desc), m_stackLevel);
+    }
+
+    void addLog(size_t start, size_t end, std::string desc) noexcept {
+        m_callStack.emplace_back(start, end, std::move(desc), m_stackLevel);
+    }
+
+    void changeLevel(int v) noexcept {
+        m_stackLevel += v;
     }
 
     void clear() noexcept {
@@ -2500,18 +2600,23 @@ public:
     }
 
     struct CallInfo {
-        CallInfo(size_t t_pos, std::string t_desc) noexcept
-            : pos(t_pos)
-            , desc(std::move(t_desc)) {
+        CallInfo(size_t t_start, size_t t_end, std::string t_desc, unsigned t_level = 0) noexcept
+            : start(t_start)
+            , end(t_end)
+            , desc(std::move(t_desc))
+            , level(t_level) {
 
         }
 
-        size_t pos = std::string_view::npos;
+        size_t start = std::string_view::npos;
+        size_t end = std::string_view::npos;
         std::string desc;
+        unsigned level = 0;
     };
 
 private:
     std::vector<CallInfo> m_callStack;
+    unsigned m_stackLevel = 0;
 };
 
 using DebugContext = ContextWrapper<DebugEnvironment>;
@@ -2575,16 +2680,48 @@ private:
     std::string m_parserName;
 };
 
-template <ParserType ParserA>
-auto parserWork(ParserA parser, std::string parserName) noexcept {
-    return parser * ModifyWithContext<ParserWork<false>, DebugContext>{parserName};
+
+struct AddStackLevel {
+    auto operator()(auto& parser, Stream& stream, debug::DebugContext& ctx) const noexcept {
+        ctx.get().changeLevel(+1);
+        Finally revert([&]() {
+            ctx.get().changeLevel(-1);
+        });
+        return parser();
+    }
+};
+
+
+struct SaveParsedSource {
+    std::string desc;
+
+    auto operator()(auto& parser, Stream& stream, debug::DebugContext& ctx) const noexcept {
+        auto start = stream.pos();
+        return parser().map([&](auto&& t) {
+            auto end = stream.pos();
+            ctx.get().addLog(start, end, desc);
+            return t;
+        });
+    }
+};
+
 }
 
+namespace prs {
 
-template <ParserType ParserA>
-auto parserError(ParserA parser, std::string parserName) noexcept {
-    return parser * ModifyWithContext<ParserWork<true>, DebugContext>{parserName};
-}
+template<>
+struct ModifierTrait<debug::AddStackLevel> {
+    using Ctx = debug::DebugContext;
+};
 
+template<>
+struct ModifierTrait<debug::SaveParsedSource> {
+    using Ctx = debug::DebugContext;
+};
+
+template <bool b>
+struct ModifierTrait<debug::ParserWork<b>> {
+    using Ctx = debug::DebugContext;
+};
 
 }

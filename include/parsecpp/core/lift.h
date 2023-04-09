@@ -73,7 +73,7 @@ auto concat(Args &&...args) noexcept {
 }
 
 template <typename Fn>
-auto satisfy(Fn&& tTest) noexcept {
+constexpr auto satisfy(Fn&& tTest) noexcept {
     return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
         if (auto c = stream.checkFirst(test); c != 0) {
             return Parser<char>::data(c);

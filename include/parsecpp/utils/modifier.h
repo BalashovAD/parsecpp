@@ -48,6 +48,11 @@ private:
 template <typename ModifierClass, typename Ctx>
 class ModifyWithContext {
 public:
+    explicit ModifyWithContext(ModifierClass fn) noexcept(std::is_nothrow_move_constructible_v<ModifierClass>)
+        : m_modifier(std::move(fn)) {
+
+    }
+
     template <typename ...Args>
     explicit ModifyWithContext(Args&& ...args) noexcept(std::is_nothrow_constructible_v<ModifierClass, Args...>)
         : m_modifier(std::forward<Args>(args)...) {
@@ -59,6 +64,12 @@ public:
     }
 private:
     ModifierClass m_modifier;
+};
+
+
+template <typename Modifier>
+struct ModifierTrait {
+    using Ctx = VoidContext;
 };
 
 
@@ -101,6 +112,35 @@ auto operator*(ParserA parserA, ModifyWithContext<Modify, Ctx> modifier) noexcep
             return mod(p, stream, ctx);
         }
     });
+}
+
+template <ParserType ParserA, typename Modify>
+    requires (!IsVoidCtx<typename ModifierTrait<Modify>::Ctx> && ParserA::nocontext)
+auto operator*(ParserA parserA, Modify modifier) noexcept {
+    using Ctx = typename ModifierTrait<Modify>::Ctx;
+    using UCtx = UnionCtx<parser_ctx_t<ParserA>, Ctx>;
+    return make_parser<UCtx>(
+            [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
+        if constexpr (ParserA::nocontext) {
+            ModifyCaller p{parser, stream};
+            return mod(p, stream, ctx);
+        } else {
+            ModifyCaller p{parser, stream, ctx};
+            return mod(p, stream, ctx);
+        }
+    });
+}
+
+
+/*
+ * Priority for operator*
+ * a `op` b * mod === a `op` (b * mod)
+ * a `op` b *= mod === (a `op` b) * mod
+ * forall `op` != >>=
+ */
+template <ParserType ParserA, typename Modify>
+auto operator*=(ParserA parserA, Modify modify) noexcept {
+    return parserA * modify;
 }
 
 }

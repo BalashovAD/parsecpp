@@ -63,3 +63,20 @@ void failed_parsing(Parser parser,
     ASSERT_TRUE(result.isError()) << "Test: " << sourceLocation.prettyPrint();
     EXPECT_EQ(result.error().pos, pos) << "Test: " << sourceLocation.prettyPrint();
 }
+
+
+template <size_t N>
+struct uniqCtxName{};
+
+template <size_t N = 0>
+auto addContext() {
+    using Ctx = ContextWrapper<details::NamedType<unsigned, uniqCtxName<N>>>;
+    auto parser = Parser<Unit, Ctx>::make([](Stream&, auto& ctx) {
+        return Parser<Unit, Ctx>::data({});
+    });
+    if constexpr (N == 0) {
+        return parser;
+    } else {
+        return addContext<N - 1>() >> parser;
+    }
+}

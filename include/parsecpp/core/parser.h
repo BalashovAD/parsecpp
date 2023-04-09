@@ -81,6 +81,13 @@ public:
         return operator()(stream, ctx);
     }
 
+
+    template <typename ...Args>
+        requires(std::is_constructible_v<Ctx, Args...>)
+    static Ctx makeCtx(Args&& ...args) noexcept(std::is_nothrow_constructible_v<Ctx, Args...>) {
+        return Ctx{std::forward<Args>(args)...};
+    }
+
     /**
      * @def `>>` :: Parser<A> -> Parser<B> -> Parser<B>
      */

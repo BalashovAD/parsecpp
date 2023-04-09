@@ -90,3 +90,43 @@ BENCHMARK_CAPTURE(BM_Modifier, PerfectLong8, parserPerfect8, CHALLENGE8);
 BENCHMARK_CAPTURE(BM_Modifier, VirtualLong8, parserVirtual8, CHALLENGE8);
 
 #endif
+
+struct ModMustConsume {
+    template <typename T>
+    auto operator()(ModifyCallerI<T>& parser, Stream& s) const {
+        auto pos = s.pos();
+        return parser().flatMap([pos, &s](T &&t) {
+            if (s.pos() > pos) {
+                return Parser<T>::data(t);
+            } else {
+                return Parser<T>::makeError("Didn't consume stream", s.pos());
+            }
+        });
+    }
+};
+
+static inline std::string CHALLENGE_CONSUME = details::repeatF<4>(std::string{"b"}, [](auto s) {return s + s;});
+
+static inline auto parserConsumeMod = (charFrom('b') * ModMustConsume{}).repeat<1<<4>().endOfStream();
+static inline auto parserConsumeEtalon = (charFrom('b').mustConsume()).repeat<1<<4>().endOfStream();
+
+BENCHMARK_CAPTURE(BM_Modifier, ConsumeEtalon, parserConsumeEtalon, CHALLENGE_CONSUME);
+BENCHMARK_CAPTURE(BM_Modifier, ConsumeMod, parserConsumeMod, CHALLENGE_CONSUME);
+
+static inline auto parserConsumeModDrop = (charFrom('b') * ModMustConsume{}).drop().repeat().endOfStream();
+static inline auto parserConsumeEtalonDrop = (charFrom('b').mustConsume()).drop().repeat().endOfStream();
+
+BENCHMARK_CAPTURE(BM_Modifier, ConsumeEtalonDrop, parserConsumeEtalonDrop, CHALLENGE_CONSUME);
+BENCHMARK_CAPTURE(BM_Modifier, ConsumeModDrop, parserConsumeModDrop, CHALLENGE_CONSUME);
+
+#ifdef ENABLE_HARD_BENCHMARK
+
+static inline std::string CHALLENGE_CONSUME8 = details::repeatF<8>(std::string{"b"}, [](auto s) {return s + s;});
+
+static inline auto parserConsumeMod8 = details::repeatF<8>((charFrom('b') * ModMustConsume{}), [](auto t) {return t >> t;});
+static inline auto parserConsumeEtalon8 = details::repeatF<8>(charFrom('b').mustConsume(), [](auto t) {return t >> t;});
+
+BENCHMARK_CAPTURE(BM_Modifier, ConsumeEtalon8, parserConsumeEtalon8, CHALLENGE_CONSUME8);
+BENCHMARK_CAPTURE(BM_Modifier, ConsumeMod8, parserConsumeMod8, CHALLENGE_CONSUME8);
+
+#endif

@@ -398,7 +398,6 @@ constexpr decltype(auto) repeatF(T t, Fn op) noexcept {
 
 namespace prs {
 
-
 template <typename T, typename Error>
     requires(!std::same_as<std::decay_t<T>, std::decay_t<Error>>)
 class Expected {
@@ -513,7 +512,7 @@ public:
     auto map(OnSuccess onSuccess) &&
                     noexcept(map_move_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::invoke_result_t<OnSuccess, T&&>;
         return isError() ? Expected<Result, Error>{std::move(m_error)}
                 : Expected<Result, Error>{onSuccess(std::move(m_data))};
     }
@@ -582,6 +581,7 @@ private:
     };
 };
 
+
 }
 // #include <parsecpp/utils/funcHelper.h>
 
@@ -612,16 +612,16 @@ using NamedType = TypeWrapperB<T, Name>;
 
 template <typename T>
 struct ConvertToTypeWrapperT {
-    using type = CtxType<T>;
+    using Type = CtxType<T>;
 };
 
 template <typename T, typename K>
 struct ConvertToTypeWrapperT<TypeWrapperB<T, K>> {
-    using type = TypeWrapperB<T, std::decay_t<K>>;
+    using Type = TypeWrapperB<T, std::decay_t<K>>;
 };
 
 template <typename T>
-using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::type;
+using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::Type;
 
 
 // Context wrapper
@@ -647,7 +647,7 @@ public:
     static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
 
-    explicit ContextWrapperT(T value = {}) noexcept
+    explicit ContextWrapperT(T value = T{}) noexcept
         : m_value(std::move(value)) {
 
     }
@@ -751,6 +751,8 @@ public:
         : ContextWrapperT<Types>(std::forward<Args>(args))... {
 
     }
+
+    explicit ContextWrapperT() noexcept = default;
 };
 
 // utils
@@ -810,6 +812,23 @@ constexpr bool containsTypeF() noexcept {
     }
 }
 
+
+template <typename Ctx, typename T>
+struct GetTypeWrapperT {
+    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
+};
+
+template <typename CtxType, typename T>
+struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
+    using Type = CtxType;
+};
+
+
+template <typename Ctx, typename T>
+        requires(containsTypeF<Ctx, T>())
+using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
+
+
 template <ContextType Ctx1, ContextType ...Args>
 struct unionImpl;
 
@@ -820,7 +839,7 @@ struct unionImpl<Ctx1> {
 
 template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
 struct unionImpl<Ctx1, Ctx2, Args...> {
-    using Type = typename unionImpl<typename unionImpl<Ctx1>::Type, Args...>::Type;
+    using Type = typename unionImpl<typename unionImpl<Ctx1, Ctx2>::Type, Args...>::Type;
 };
 
 template <ContextType Ctx1>
@@ -831,15 +850,10 @@ struct unionImpl<Ctx1, VoidContext> {
 template <ContextType Ctx1, typename T>
     requires (containsTypeF<Ctx1, T>())
 struct unionImpl<Ctx1, details::ContextWrapperT<T>> {
+    static_assert(std::is_same_v<typename GetTypeWrapper<Ctx1, T>::Type, typename ConvertToTypeWrapper<T>::Type>,
+            "Use the same key type for different value types. Use details::NamedType to split types.");
     using Type = Ctx1;
 };
-
-template <typename T1, typename T2>
-    requires (!std::is_same_v<T1, T2>)
-struct unionImpl<details::ContextWrapperT<T1>, details::ContextWrapperT<T2>> {
-    using Type = ContextWrapper<T1, T2>;
-};
-
 
 template <typename ...Args, typename T>
     requires (!containsTypeF<ContextWrapperT<Args...>, T>())
@@ -848,25 +862,10 @@ struct unionImpl<ContextWrapperT<Args...>, details::ContextWrapperT<T>> {
 };
 
 
-template <typename Ctx1, typename Head, typename ...Args>
-struct unionImpl<Ctx1, ContextWrapperT<Head, Args...>> {
-    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Args...>>::Type;
+template <typename Ctx1, typename Head, typename ...Tail>
+struct unionImpl<Ctx1, ContextWrapperT<Head, Tail...>> {
+    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Tail...>>::Type;
 };
-
-
-template <typename Ctx, typename T>
-struct GetTypeWrapperT {
-    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
-};
-
-template <typename CtxType, typename T>
-struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
-    using Type = typename CtxType::TypeWrapper;
-};
-
-template <typename Ctx, typename T>
-    requires(containsTypeF<Ctx, T>())
-using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
 
 }
 
@@ -972,6 +971,13 @@ public:
     template <typename Context>
     constexpr Result apply(Stream& stream, Context& ctx) const noexcept(nothrow) {
         return operator()(stream, ctx);
+    }
+
+
+    template <typename ...Args>
+        requires(std::is_constructible_v<Ctx, Args...>)
+    static Ctx makeCtx(Args&& ...args) noexcept(std::is_nothrow_constructible_v<Ctx, Args...>) {
+        return Ctx{std::forward<Args>(args)...};
     }
 
     /**
@@ -1630,7 +1636,7 @@ auto lazyForgetCtx(Fn const& f) noexcept {
 namespace prs::details {
 
 template <typename T, typename First, typename ...Args>
-bool cmpAnyOf(T const& t, First &&f, Args &&...args) noexcept {
+constexpr bool cmpAnyOf(T const& t, First &&f, Args &&...args) noexcept {
     if constexpr (sizeof...(args) > 0) {
         return f == t || cmpAnyOf(t, std::forward<Args>(args)...);
     } else {
@@ -1753,7 +1759,7 @@ auto concat(Args &&...args) noexcept {
 }
 
 template <typename Fn>
-auto satisfy(Fn&& tTest) noexcept {
+constexpr auto satisfy(Fn&& tTest) noexcept {
     return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
         if (auto c = stream.checkFirst(test); c != 0) {
             return Parser<char>::data(c);
@@ -1938,7 +1944,7 @@ auto searchText(std::string const& searchPattern) noexcept {
 }
 
 template <LeftCmpWith<char> ...Args>
-auto charFrom(Args ...chars) noexcept {
+constexpr auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
         return details::cmpAnyOf(c, chars...);
     });

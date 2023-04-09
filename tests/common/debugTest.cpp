@@ -15,7 +15,7 @@ TEST(Debug, LogPoint) {
 TEST(Debug, ParserWorkSuccess) {
     debug::DebugContext ctx{{}};
 
-    auto parser = spaces() >> debug::parserWork(number<int>(), "Int") << spaces();
+    auto parser = spaces() >> number<int>() * debug::ParserWork<false>("Int") << spaces();
     Stream stream{" 12345a"};
     EXPECT_FALSE(parser(stream, ctx).isError());
 //    std::cout << ctx.get().print(stream) << std::endl;
@@ -25,7 +25,7 @@ TEST(Debug, ParserWorkSuccess) {
 TEST(Debug, ParserWorkError) {
     debug::DebugContext ctx{{}};
 
-    auto parser = spaces() >> debug::parserWork(number<int>(), "Int").maybe() << spaces();
+    auto parser = spaces() >> (number<int>() * debug::ParserWork<false>("Int")).maybe() << spaces();
     Stream stream{"  a"};
     EXPECT_FALSE(parser(stream, ctx).isError());
 //    std::cout << ctx.get().print(stream) << std::endl;
@@ -35,7 +35,7 @@ TEST(Debug, ParserWorkError) {
 TEST(Debug, ParserError) {
     debug::DebugContext ctx{};
 
-    auto parser = spaces() >> debug::parserError(number<int>(), "Int").maybe() << spaces();
+    auto parser = spaces() >> (number<int>() * debug::ParserWork<true>("Int")).maybe() << spaces();
     Stream stream{"  a"};
     EXPECT_FALSE(parser(stream, ctx).isError());
 //    std::cout << ctx.get().print(stream) << std::endl;

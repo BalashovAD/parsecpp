@@ -87,7 +87,7 @@ private:
     Variant m_value;
 };
 
-using PJ = Parser<Json::ptr>;
+using PJ = Parser<Json::ptr, debug::DebugContext>;
 using Make = details::MakeShared<Json>;
 
 PJ parseObject() noexcept;
@@ -95,19 +95,19 @@ PJ parseArray() noexcept;
 
 
 auto parseString() noexcept {
-    return between<std::string>('"') >>= Make{};
+    return (between<std::string>('"') *= debug::SaveParsedSource{"String"}) >>= Make{};
 }
 
 auto parseDouble() noexcept {
-    return number() >>= Make{};
+    return (number<double>() *= debug::SaveParsedSource{"Number"}) >>= Make{};
 }
 
 auto parseUndefined() noexcept {
-    return (spaces() >> literal("null") >> spaces() >> pure(Json::Null{})) >>= Make{};
+    return (spaces() >> literal("null") >> spaces() >> pure(Json::Null{}) *= debug::SaveParsedSource{"Undefined"}) >>= Make{};
 }
 
 auto parseBool() noexcept {
-    return (spaces() >> (literal("false") >> pure(false)) | (literal("true") >> pure(true))) >>= Make{};
+    return (spaces() >> (literal("false") >> pure(false) | literal("true") >> pure(true)) *= debug::SaveParsedSource{"Boolean"}) >>= Make{};
 }
 
 auto parseAny() noexcept {
@@ -121,9 +121,8 @@ PJ parseObject() noexcept {
     auto parserPost = charFromSpaces('}');
     return (parserPre >>
             (toMap(parserKey, parseAny(), parserDelim) >>= Make{})
-        << parserPost).toCommonType();
+        << parserPost << debug::logPoint("Object end") *= debug::AddStackLevel{}).toCommonType();
 }
-
 
 PJ parseArray() noexcept {
     auto parserPre = charFromSpaces('[');
@@ -131,7 +130,7 @@ PJ parseArray() noexcept {
     auto parserPost = charFromSpaces(']');
     return (parserPre >>
          (parseAny().repeat(parserDelim) >>= Make{})
-        << parserPost).toCommonType();
+        << parserPost << debug::logPoint("Array end") *= debug::AddStackLevel{}).toCommonType();
 }
 
 
@@ -140,10 +139,15 @@ int main() {
 
     auto parser = parseAny().endOfStream();
 
-    // {"a":"test", "b"  : 33 , "c":[1,2,3,4], "d": null, "eee": {"r":false}}
+    // {"a": "test", "b"  : 33 , "c":[1,2,{"q": 2}, 4], "d": null, "eee": {"r":false}}
     getline(std::cin, strJson);
     Stream stream{strJson};
-    return parser(stream).join([](Json::ptr const& spExpr) {
+    debug::DebugContext ctx;
+    Finally printStack([&]() {
+        std::cout << "\n" << ctx.get().print(stream) << std::endl;
+    });
+
+    return parser(stream, ctx).join([&](Json::ptr const& spExpr) {
         std::cout << "Json: " << spExpr->toString() << std::endl;
         return 0;
     }, [&](details::ParsingError const& error) {

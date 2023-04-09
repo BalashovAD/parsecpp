@@ -132,7 +132,7 @@ auto searchText(std::string const& searchPattern) noexcept {
 }
 
 template <LeftCmpWith<char> ...Args>
-auto charFrom(Args ...chars) noexcept {
+constexpr auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
         return details::cmpAnyOf(c, chars...);
     });
