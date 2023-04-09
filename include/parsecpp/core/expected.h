@@ -8,7 +8,6 @@
 
 namespace prs {
 
-
 template <typename T, typename Error>
     requires(!std::same_as<std::decay_t<T>, std::decay_t<Error>>)
 class Expected {
@@ -123,7 +122,7 @@ public:
     auto map(OnSuccess onSuccess) &&
                     noexcept(map_move_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::invoke_result_t<OnSuccess, T&&>;
         return isError() ? Expected<Result, Error>{std::move(m_error)}
                 : Expected<Result, Error>{onSuccess(std::move(m_data))};
     }
@@ -191,5 +190,6 @@ private:
         Error m_error;
     };
 };
+
 
 }

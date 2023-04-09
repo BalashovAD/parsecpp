@@ -14,7 +14,7 @@ struct TypeWrapperB {
 
 
 template <typename T>
-using CtxType = TypeWrapperB<T, std::remove_const_t<T>>;
+using CtxType = TypeWrapperB<T, std::decay_t<T>>;
 
 template <typename T, typename Name>
 using NamedType = TypeWrapperB<T, Name>;
@@ -22,16 +22,16 @@ using NamedType = TypeWrapperB<T, Name>;
 
 template <typename T>
 struct ConvertToTypeWrapperT {
-    using type = CtxType<T>;
+    using Type = CtxType<T>;
 };
 
 template <typename T, typename K>
 struct ConvertToTypeWrapperT<TypeWrapperB<T, K>> {
-    using type = TypeWrapperB<T, K>;
+    using Type = TypeWrapperB<T, std::decay_t<K>>;
 };
 
 template <typename T>
-using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::type;
+using ConvertToTypeWrapper = typename ConvertToTypeWrapperT<T>::Type;
 
 
 // Context wrapper
@@ -52,6 +52,33 @@ class ContextWrapperT<TypeWrapperB<T, K>> {
 public:
     using Type = T;
     using Key = K;
+    using TypeWrapper = TypeWrapperB<T, K>;
+
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 1;
+
+    explicit ContextWrapperT(T value = T{}) noexcept
+        : m_value(std::move(value)) {
+
+    }
+
+    Type& get() noexcept {
+        return m_value;
+    }
+
+    Type const& get() const noexcept {
+        return m_value;
+    }
+private:
+    T m_value{};
+};
+
+template <typename T, typename K>
+class ContextWrapperT<TypeWrapperB<T&, K>> {
+public:
+    using Type = T;
+    using Key = K;
+    using TypeWrapper = TypeWrapperB<T&, K>;
 
     static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
@@ -78,6 +105,30 @@ class ContextWrapperT<TypeWrapperB<T const, K>> {
 public:
     using Type = T;
     using Key = K;
+    using TypeWrapper = TypeWrapperB<T const, K>;
+
+    static constexpr bool iscontext = true;
+    static constexpr size_t size = 1;
+
+    explicit ContextWrapperT(T const& value = T{}) noexcept
+        : m_value(value) {
+
+    }
+
+    Type const& get() const noexcept {
+        return m_value;
+    }
+private:
+    T m_value{};
+};
+
+
+template <typename T, typename K>
+class ContextWrapperT<TypeWrapperB<T const&, K>> {
+public:
+    using Type = T;
+    using Key = K;
+    using TypeWrapper = TypeWrapperB<T const&, K>;
 
     static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
@@ -106,10 +157,12 @@ public:
 
     template <typename ...Args>
         requires(sizeof...(Args) == size)
-    explicit ContextWrapperT(Args& ...args) noexcept
-        : ContextWrapperT<ConvertToTypeWrapper<Args>>(args)... {
+    explicit ContextWrapperT(Args&& ...args) noexcept
+        : ContextWrapperT<Types>(std::forward<Args>(args))... {
 
     }
+
+    explicit ContextWrapperT() noexcept = default;
 };
 
 // utils
@@ -169,6 +222,23 @@ constexpr bool containsTypeF() noexcept {
     }
 }
 
+
+template <typename Ctx, typename T>
+struct GetTypeWrapperT {
+    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
+};
+
+template <typename CtxType, typename T>
+struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
+    using Type = CtxType;
+};
+
+
+template <typename Ctx, typename T>
+        requires(containsTypeF<Ctx, T>())
+using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
+
+
 template <ContextType Ctx1, ContextType ...Args>
 struct unionImpl;
 
@@ -179,7 +249,7 @@ struct unionImpl<Ctx1> {
 
 template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
 struct unionImpl<Ctx1, Ctx2, Args...> {
-    using Type = unionImpl<typename unionImpl<Ctx1>::Type, Args...>;
+    using Type = typename unionImpl<typename unionImpl<Ctx1, Ctx2>::Type, Args...>::Type;
 };
 
 template <ContextType Ctx1>
@@ -190,15 +260,10 @@ struct unionImpl<Ctx1, VoidContext> {
 template <ContextType Ctx1, typename T>
     requires (containsTypeF<Ctx1, T>())
 struct unionImpl<Ctx1, details::ContextWrapperT<T>> {
+    static_assert(std::is_same_v<typename GetTypeWrapper<Ctx1, T>::Type, typename ConvertToTypeWrapper<T>::Type>,
+            "Use the same key type for different value types. Use details::NamedType to split types.");
     using Type = Ctx1;
 };
-
-template <typename T1, typename T2>
-    requires (!std::is_same_v<T1, T2>)
-struct unionImpl<details::ContextWrapperT<T1>, details::ContextWrapperT<T2>> {
-    using Type = ContextWrapper<T1, T2>;
-};
-
 
 template <typename ...Args, typename T>
     requires (!containsTypeF<ContextWrapperT<Args...>, T>())
@@ -207,25 +272,10 @@ struct unionImpl<ContextWrapperT<Args...>, details::ContextWrapperT<T>> {
 };
 
 
-template <typename Ctx1, typename Head, typename ...Args>
-struct unionImpl<Ctx1, ContextWrapperT<Head, Args...>> {
-    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Args...>>::Type;
+template <typename Ctx1, typename Head, typename ...Tail>
+struct unionImpl<Ctx1, ContextWrapperT<Head, Tail...>> {
+    using Type = typename unionImpl<typename unionImpl<Ctx1, ContextWrapperT<Head>>::Type, ContextWrapperT<Tail...>>::Type;
 };
-
-
-template <typename Ctx, typename T>
-struct GetTypeWrapperT {
-    using Type = std::tuple_element_t<details::findIndex<0, typename Ctx::TupleTypes, T>(), typename Ctx::TupleTypes>;
-};
-
-template <typename CtxType, typename T>
-struct GetTypeWrapperT<ContextWrapperT<CtxType>, T> {
-    using Type = typename CtxType::Type;
-};
-
-template <typename Ctx, typename T>
-    requires(containsTypeF<Ctx, T>())
-using GetTypeWrapper = typename GetTypeWrapperT<Ctx, T>::Type;
 
 }
 
@@ -237,15 +287,19 @@ template <ContextType Ctx, typename T>
 static constexpr bool containsType = details::containsTypeF<Ctx, T>();
 
 
-template <ContextType Ctx1, ContextType Ctx2, ContextType ...Args>
-using UnionCtx = typename details::unionImpl<Ctx1, Ctx2>::Type;
+template <ContextType ...Args>
+using UnionCtx = typename details::unionImpl<Args...>::Type;
 
 
 template <typename T, ContextType Ctx>
     requires (containsType<Ctx, T>)
 decltype(auto) get(Ctx& ctx) noexcept {
-    using TypeWrapper = details::GetTypeWrapper<Ctx, T>;
-    return static_cast<ContextWrapper<TypeWrapper>>(ctx).get();
+    if constexpr (Ctx::size == 1) {
+        return ctx.get();
+    } else {
+        using TypeWrapper = details::GetTypeWrapper<Ctx, T>;
+        return static_cast<ContextWrapper<TypeWrapper>>(ctx).get();
+    }
 }
 
 

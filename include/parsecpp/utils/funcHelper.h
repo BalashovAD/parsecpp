@@ -29,18 +29,18 @@ struct Drop {
 
 
 template <typename Parser>
-using parser_result_t = typename Parser::Type;
-
-
-template <typename Parser>
-using parser_ctx_t = typename Parser::Ctx;
-
-
-template <typename Parser>
 constexpr bool is_parser_v = std::is_invocable_v<Parser, Stream&>;
 
 template <typename T>
 concept ParserType = is_parser_v<T>;
+
+
+template <ParserType Parser>
+using parser_result_t = typename std::decay_t<Parser>::Type;
+
+
+template <ParserType Parser>
+using parser_ctx_t = typename std::decay_t<Parser>::Ctx;
 
 static constexpr size_t MAX_ITERATION = 1000000;
 
@@ -109,5 +109,15 @@ private:
     Fn m_fn;
 };
 
-} // details
-} // prs
+
+template <size_t pw, typename T, typename Fn>
+constexpr decltype(auto) repeatF(T t, Fn op) noexcept {
+    if constexpr (pw == 0) {
+        return t;
+    } else {
+        return repeatF<pw - 1>(op(t), op);
+    }
+}
+
+}
+}

@@ -1,34 +1,55 @@
 #include "../testHelper.h"
 
 TEST(Debug, LogPoint) {
-    debug::DebugEnvironment env;
-    auto parser = number<unsigned>() << debug::logPoint(env, "test") << charFrom('a');
+    debug::DebugContext ctx{{}};
+
+    auto parser = number<unsigned>() << debug::logPoint("test") << charFrom('a');
     Stream stream{"12345a"};
-    EXPECT_FALSE(parser(stream).isError());
-    std::cout << env.print(stream) << std::endl;
+
+    EXPECT_FALSE(parser(stream, ctx).isError());
+//    std::cout << ctx.get().print(stream) << std::endl;
+    EXPECT_FALSE(ctx.get().print(stream).empty());
 }
 
 
 TEST(Debug, ParserWorkSuccess) {
-    debug::DebugEnvironment env;
-    auto parser = spaces() >> debug::parserWork(env, number<int>(), "Int") << spaces();
+    debug::DebugContext ctx{{}};
+
+    auto parser = spaces() >> number<int>() * debug::ParserWork<false>("Int") << spaces();
     Stream stream{" 12345a"};
-    EXPECT_FALSE(parser(stream).isError());
-    std::cout << env.print(stream) << std::endl;
+    EXPECT_FALSE(parser(stream, ctx).isError());
+//    std::cout << ctx.get().print(stream) << std::endl;
+    EXPECT_FALSE(ctx.get().print(stream).empty());
 }
 
 TEST(Debug, ParserWorkError) {
-    debug::DebugEnvironment env;
-    auto parser = spaces() >> debug::parserWork(env, number<int>(), "Int").maybe() << spaces();
+    debug::DebugContext ctx{{}};
+
+    auto parser = spaces() >> (number<int>() * debug::ParserWork<false>("Int")).maybe() << spaces();
     Stream stream{"  a"};
-    EXPECT_FALSE(parser(stream).isError());
-    std::cout << env.print(stream) << std::endl;
+    EXPECT_FALSE(parser(stream, ctx).isError());
+//    std::cout << ctx.get().print(stream) << std::endl;
+    EXPECT_FALSE(ctx.get().print(stream).empty());
 }
 
 TEST(Debug, ParserError) {
-    debug::DebugEnvironment env;
-    auto parser = spaces() >> debug::parserError(env, number<int>(), "Int").maybe() << spaces();
+    debug::DebugContext ctx{};
+
+    auto parser = spaces() >> (number<int>() * debug::ParserWork<true>("Int")).maybe() << spaces();
     Stream stream{"  a"};
-    EXPECT_FALSE(parser(stream).isError());
-    std::cout << env.print(stream) << std::endl;
+    EXPECT_FALSE(parser(stream, ctx).isError());
+//    std::cout << ctx.get().print(stream) << std::endl;
+    EXPECT_FALSE(ctx.get().print(stream).empty());
+}
+
+TEST(Debug, DoubleDebugContext) {
+    debug::DebugContext ctx{};
+
+    auto parser = charFrom('a') >>
+            number<unsigned>() * ModifyWithContext<debug::ParserWork<false>, debug::DebugContext>{"Number"}
+        << charFrom('b') << debug::LogPoint{"end"}.toParser();
+    Stream stream{"a123bc"};
+    EXPECT_FALSE(parser(stream, ctx).isError());
+//    std::cout << ctx.get().print(stream) << std::endl;
+    EXPECT_FALSE(ctx.get().print(stream).empty());
 }

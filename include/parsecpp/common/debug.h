@@ -1,38 +1,34 @@
 #pragma once
 
 #include <parsecpp/core/parser.h>
+#include <parsecpp/utils/modifier.h>
 #include <parsecpp/utils/cmp.h>
 
 namespace prs::debug {
 
 class DebugParser;
 
-//template <bool enable = true>
 class DebugEnvironment {
 public:
     struct PrintEOSHelper {
     public:
-        static constexpr char EOS_SYMBOL = '\0';
+        static constexpr std::string_view EOS = "_EOS_";
 
-        PrintEOSHelper(std::string_view full, size_t pos) noexcept {
-            if (full.size() > pos) {
-                m_symbol = full[pos];
+        PrintEOSHelper(std::string_view full, size_t startPos, size_t endPos) noexcept {
+            if (full.size() > startPos) {
+                m_str = full.substr(startPos, std::max<unsigned>(endPos - startPos, 1));
             } else {
-                m_symbol = EOS_SYMBOL;
+                m_str = EOS;
             }
         }
 
         friend std::ostream& operator<<(std::ostream& os, PrintEOSHelper helper) noexcept {
-            if (helper.m_symbol == EOS_SYMBOL) {
-                os << "_EOS_";
-            } else {
-                os << helper.m_symbol;
-            }
+            os << helper.m_str;
             return os;
         }
 
     private:
-        char m_symbol = EOS_SYMBOL;
+        std::string_view m_str;
     };
 
     DebugEnvironment() noexcept = default;
@@ -42,16 +38,28 @@ public:
         out << "Parse '" << stream.full() << "'\n";
         auto step = 0u;
         for (auto const& callInfo : m_callStack) {
-            out << step++ << ". pos: " << callInfo.pos
-                << "(" << PrintEOSHelper(stream.full(), callInfo.pos) << ")"
-                << " desc: " << callInfo.desc << "\n";
+            out << step++ << ". ";
+            for (auto i = 0u; i != callInfo.level; ++i) {
+                out << ">";
+            }
+            out << "pos: " << callInfo.end
+                << "(" << PrintEOSHelper(stream.full(), callInfo.start, callInfo.end) << ")"
+                << ": " << callInfo.desc << "\n";
         }
 
         return out.str();
     }
 
-    void addLog(size_t pos, std::string desc) const noexcept {
-        m_callStack.emplace_back(pos, std::move(desc));
+    void addLog(size_t pos, std::string desc) noexcept {
+        m_callStack.emplace_back(pos, pos, std::move(desc), m_stackLevel);
+    }
+
+    void addLog(size_t start, size_t end, std::string desc) noexcept {
+        m_callStack.emplace_back(start, end, std::move(desc), m_stackLevel);
+    }
+
+    void changeLevel(int v) noexcept {
+        m_stackLevel += v;
     }
 
     void clear() noexcept {
@@ -59,49 +67,48 @@ public:
     }
 
     struct CallInfo {
-        CallInfo(size_t t_pos, std::string t_desc) noexcept
-            : pos(t_pos)
-            , desc(std::move(t_desc)) {
+        CallInfo(size_t t_start, size_t t_end, std::string t_desc, unsigned t_level = 0) noexcept
+            : start(t_start)
+            , end(t_end)
+            , desc(std::move(t_desc))
+            , level(t_level) {
 
         }
 
-        size_t pos = std::string_view::npos;
+        size_t start = std::string_view::npos;
+        size_t end = std::string_view::npos;
         std::string desc;
+        unsigned level = 0;
     };
 
 private:
-    mutable std::vector<CallInfo> m_callStack;
+    std::vector<CallInfo> m_callStack;
+    unsigned m_stackLevel = 0;
 };
 
+using DebugContext = ContextWrapper<DebugEnvironment>;
 
-class DebugParser {
+template <typename T, typename CtxT = VoidContext>
+class ParserCast {
 public:
-    explicit DebugParser(DebugEnvironment& env) noexcept
-        : m_env(env) {
+    using Ctx = CtxT;
 
+    auto toParser() const noexcept {
+        return make_parser<Ctx>(static_cast<T const&>(*this));
     }
-
-    void addLog(size_t pos, std::string desc) const noexcept {
-        m_env.addLog(pos, std::move(desc));
-    }
-
-    using CallInfo = DebugEnvironment::CallInfo;
-private:
-    DebugEnvironment& m_env;
 };
 
-struct LogPoint : private DebugParser {
+struct LogPoint : public ParserCast<LogPoint, DebugContext> {
 public:
     using P = Parser<Drop>;
 
-    LogPoint(DebugEnvironment& env, std::string const& name) noexcept
-        : DebugParser(env)
-        , m_desc("Point{" + name + "}") {
+    explicit LogPoint(std::string const& name) noexcept
+        : m_desc("Point{" + name + "}") {
 
     }
 
-    P::Result operator()(Stream& stream) const noexcept {
-        addLog(stream.pos(), m_desc);
+    P::Result operator()(Stream& stream, Ctx& ctx) const noexcept {
+        ctx.get().addLog(stream.pos(), m_desc);
         return P::data({});
     }
 private:
@@ -109,67 +116,79 @@ private:
 };
 
 
-inline auto logPoint(DebugEnvironment& env, std::string name) noexcept {
-    return make_parser(LogPoint{env, std::move(name)});
+inline auto logPoint(std::string const& name) noexcept {
+    return LogPoint{name}.toParser();
 }
 
-template <bool onlyError, ParserType ParserA>
-struct ParserWork : private DebugParser {
+template <bool onlyError>
+struct ParserWork {
 public:
-    using Result = typename ParserA::Result;
-    ParserWork(DebugEnvironment& env, ParserA tParser, std::string parserName) noexcept
-        : DebugParser(env)
-        , m_parser(std::move(tParser))
-        , m_parserName(std::move(parserName)) {
+    explicit ParserWork(std::string parserName) noexcept
+        : m_parserName(std::move(parserName)) {
 
     }
 
-    Result operator()(Stream& stream) const noexcept(ParserA::nothrow) {
+    auto operator()(auto& parser, Stream& stream, DebugContext& ctx) const {
         if constexpr (!onlyError) {
-            addLog(stream.pos(), "Before{" + m_parserName + "}");
+            ctx.get().addLog(stream.pos(), "Before{" + m_parserName + "}");
         }
 
-        return m_parser.apply(stream).join([&](auto&& t) {
+        return parser().map([&](auto&& t) {
             if constexpr (!onlyError) {
-                addLog(stream.pos(), "After{" + m_parserName + "}");
+                ctx.get().addLog(stream.pos(), "After{" + m_parserName + "}");
             }
-            return Result{t};
+            return t;
         }, [&](auto &&error) {
-            addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
-            return Result{error};
+            ctx.get().addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
+            return error;
         });
     }
 private:
-    ParserA m_parser;
     std::string m_parserName;
 };
 
-template <ParserType ParserA>
-auto parserWork(DebugEnvironment& env, ParserA tParser, std::string parserName) noexcept {
-    return ParserA::make(ParserWork<false, std::decay_t<ParserA>>{env, std::move(tParser), std::move(parserName)});
-}
 
-
-template <ParserType ParserA>
-auto parserError(DebugEnvironment& env, ParserA tParser, std::string parserName) noexcept {
-    return ParserA::make(ParserWork<true, std::decay_t<ParserA>>{env, std::move(tParser), std::move(parserName)});
-}
-
-
-template <ParserType P>
-class DebugExecutor {
-public:
-    template <typename Fn>
-    DebugExecutor(std::unique_ptr<DebugEnvironment> spEnv, Fn&& fn) noexcept(std::is_nothrow_invocable_v<Fn, DebugEnvironment&>) {
-
+struct AddStackLevel {
+    auto operator()(auto& parser, Stream& stream, debug::DebugContext& ctx) const noexcept {
+        ctx.get().changeLevel(+1);
+        Finally revert([&]() {
+            ctx.get().changeLevel(-1);
+        });
+        return parser();
     }
-private:
-    std::unique_ptr<DebugEnvironment> m_spEnv;
-    P m_parser;
 };
-//
-//template <typename Fn>
-//auto makeDebug(Fn&& f) noexcept(std::is_nothrow_invocable_v<Fn, DebugEnvironment&>) {
-//    return []
-//}
+
+
+struct SaveParsedSource {
+    std::string desc;
+
+    auto operator()(auto& parser, Stream& stream, debug::DebugContext& ctx) const noexcept {
+        auto start = stream.pos();
+        return parser().map([&](auto&& t) {
+            auto end = stream.pos();
+            ctx.get().addLog(start, end, desc);
+            return t;
+        });
+    }
+};
+
+}
+
+namespace prs {
+
+template<>
+struct ModifierTrait<debug::AddStackLevel> {
+    using Ctx = debug::DebugContext;
+};
+
+template<>
+struct ModifierTrait<debug::SaveParsedSource> {
+    using Ctx = debug::DebugContext;
+};
+
+template <bool b>
+struct ModifierTrait<debug::ParserWork<b>> {
+    using Ctx = debug::DebugContext;
+};
+
 }

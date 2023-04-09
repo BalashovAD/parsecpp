@@ -66,10 +66,8 @@ public:
     constexpr Result operator()(Stream& stream, Context& ctx) const noexcept(nothrow) {
         if constexpr (nocontext && std::is_invocable_v<StoredFn, Stream&>) {
             return std::invoke(m_fn, stream);
-        } else if constexpr (std::is_invocable_v<StoredFn, Stream&, Context&>) {
-            return std::invoke(m_fn, stream, ctx);
         } else {
-            return std::invoke(m_fn, stream);
+            return std::invoke(m_fn, stream, ctx);
         }
     }
 
@@ -81,6 +79,13 @@ public:
     template <typename Context>
     constexpr Result apply(Stream& stream, Context& ctx) const noexcept(nothrow) {
         return operator()(stream, ctx);
+    }
+
+
+    template <typename ...Args>
+        requires(std::is_constructible_v<Ctx, Args...>)
+    static Ctx makeCtx(Args&& ...args) noexcept(std::is_nothrow_constructible_v<Ctx, Args...>) {
+        return Ctx{std::forward<Args>(args)...};
     }
 
     /**
@@ -129,7 +134,7 @@ public:
 
 
     /**
-     * @def `<<` :: Parser<A> -> Parser<B> -> Parser<A>
+     * @def `<<` :: Parser<A, CtxA> -> Parser<B, CtxB> -> Parser<A, CtxA & CtxB>
      */
     template <typename B, typename CtxB, typename Rhs>
         requires (!IsVoidCtx<UnionCtx<Ctx, CtxB>>)
@@ -150,6 +155,20 @@ public:
      * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
     template <std::invocable<T> ListFn>
+        requires(nocontext)
+    constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
+        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
+           return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+
+    /*
+     * <$>, fmap operator
+     * @def `>>=` :: Parser<A, Ctx> -> (A -> B) -> Parser<B, Ctx>
+     */
+    template <std::invocable<T> ListFn>
+        requires(!nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
            return lhs.apply(stream, ctx).map(fn);
@@ -218,7 +237,7 @@ public:
                 });
             });
         } else {
-            return Parser<MaybeValue<T>>::make([parser = *this](Stream& stream, auto& ctx) {
+            return Parser<MaybeValue<T>, Ctx>::make([parser = *this](Stream& stream, auto& ctx) {
                 auto backup = stream.pos();
                 return parser.apply(stream, ctx).map([](T t) {
                     if constexpr (std::is_same_v<T, Drop>) {
@@ -248,7 +267,7 @@ public:
                 });
             });
         } else {
-            return Parser<T>::make([parser = *this, defaultValue](Stream& stream, auto& ctx) {
+            return Parser<T, Ctx>::make([parser = *this, defaultValue](Stream& stream, auto& ctx) {
                 auto backup = stream.pos();
                 return parser.apply(stream, ctx).flatMapError([&stream, &backup, &defaultValue](details::ParsingError const& error) {
                     stream.restorePos(backup);
@@ -406,7 +425,7 @@ public:
     template <std::predicate<T const&> Fn>
             requires (!std::predicate<T const&, Stream&> && !nocontext)
     constexpr auto cond(Fn test) const noexcept {
-        return Parser<T>::make([parser = *this, test](Stream& stream, auto& ctx) {
+        return Parser<T, Ctx>::make([parser = *this, test](Stream& stream, auto& ctx) {
            return parser.apply(stream, ctx).flatMap([&test, &stream](T t) {
                if (test(t)) {
                    return Parser<T>::data(std::move(t));
@@ -440,7 +459,7 @@ public:
     template <std::predicate<T const&, Stream&> Fn>
         requires(!nocontext)
     constexpr auto cond(Fn test) const noexcept {
-        return Parser<T>::make([parser = *this, test](Stream& stream, auto& ctx) {
+        return Parser<T, Ctx>::make([parser = *this, test](Stream& stream, auto& ctx) {
            return parser.apply(stream, ctx).flatMap([&test, &stream](T t) {
                if (test(t, stream)) {
                    return Parser<T>::data(std::move(t));
@@ -462,7 +481,7 @@ public:
                 });
             });
         } else {
-            return Parser<Drop>::make([p = *this](Stream& s, auto& ctx) {
+            return Parser<Drop, Ctx>::make([p = *this](Stream& s, auto& ctx) {
                 return p.apply(s, ctx).map([](auto &&) {
                     return Drop{};
                 });
