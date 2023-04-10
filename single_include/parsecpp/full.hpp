@@ -310,7 +310,7 @@ using parser_result_t = typename std::decay_t<Parser>::Type;
 
 
 template <ParserType Parser>
-using parser_ctx_t = typename std::decay_t<Parser>::Ctx;
+using ParserCtx = typename std::decay_t<Parser>::Ctx;
 
 static constexpr size_t MAX_ITERATION = 1000000;
 
@@ -1233,7 +1233,7 @@ public:
             requires(!std::is_same_v<T, Drop>)
     constexpr auto repeat(Delimiter tDelimiter) const noexcept {
         using Value = T;
-        using UCtx = UnionCtx<Ctx, parser_ctx_t<Delimiter>>;
+        using UCtx = UnionCtx<Ctx, ParserCtx<Delimiter>>;
         using P = Parser<std::vector<Value>, UCtx>;
         constexpr bool noexceptP = nothrow && Delimiter::nothrow;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) noexcept(noexceptP) {
@@ -1270,7 +1270,7 @@ public:
     template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(std::is_same_v<T, Drop>)
     constexpr auto repeat(Delimiter tDelimiter) const noexcept {
-        using UCtx = UnionCtx<Ctx, parser_ctx_t<Delimiter>>;
+        using UCtx = UnionCtx<Ctx, ParserCtx<Delimiter>>;
         using P = Parser<Drop, UCtx>;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) {
             size_t iteration = 0;
@@ -1510,7 +1510,7 @@ class LazyCached {
 public:
     using P = std::invoke_result_t<Fn>;
     using ParserResult = parser_result_t<P>;
-    static constexpr bool nocontext = IsVoidCtx<parser_ctx_t<P>>;
+    static constexpr bool nocontext = IsVoidCtx<ParserCtx<P>>;
 
     explicit LazyCached(Fn const& generator) noexcept {
         if (!insideWork) { // cannot use optional.has_value() because generator() invoke ctor before optional::emplace
@@ -1737,7 +1737,7 @@ auto liftRecCtx(Fn const& fn, Stream& stream, Ctx& ctx, TupleParser const& parse
 }
 
 template <typename Fn, ParserType ...Args>
-    requires(IsVoidCtx<parser_ctx_t<Args>> && ...)
+    requires(IsVoidCtx<ParserCtx<Args>> && ...)
 auto liftM(Fn fn, Args &&...args) noexcept {
     return make_parser([fn, parsers = std::make_tuple(args...)](Stream& s) {
         return details::liftRec(fn, s, parsers);
@@ -1746,9 +1746,9 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 
 
 template <typename Fn, ParserType ...Args>
-    requires(!IsVoidCtx<parser_ctx_t<Args>> || ...)
+    requires(!IsVoidCtx<ParserCtx<Args>> || ...)
 auto liftM(Fn fn, Args &&...args) noexcept {
-    using Ctx = UnionCtx<parser_ctx_t<Args>...>;
+    using Ctx = UnionCtx<ParserCtx<Args>...>;
     return make_parser<Ctx>([fn, parsers = std::make_tuple(args...)](Stream& s, auto& ctx) {
         return details::liftRec(fn, s, ctx, parsers);
     });
@@ -2051,7 +2051,7 @@ auto literal(std::string str) noexcept {
 
 
 template <ParserType P>
-    requires (IsVoidCtx<parser_ctx_t<P>>)
+    requires (IsVoidCtx<ParserCtx<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream) {
         auto start = stream.pos();
@@ -2070,7 +2070,7 @@ auto search(P tParser) noexcept {
 }
 
 template <ParserType P>
-    requires (!IsVoidCtx<parser_ctx_t<P>>)
+    requires (!IsVoidCtx<ParserCtx<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream, auto& ctx) {
         auto start = stream.pos();
@@ -2117,7 +2117,7 @@ auto toMap(ParserKey key, ParserValue value) noexcept {
     using Key = parser_result_t<ParserKey>;
     using Value = parser_result_t<ParserValue>;
     using Map = std::map<Key, Value>;
-    using UCtx = UnionCtx<parser_ctx_t<ParserKey>, parser_ctx_t<ParserValue>>;
+    using UCtx = UnionCtx<ParserCtx<ParserKey>, ParserCtx<ParserValue>>;
     using P = Parser<Map, UCtx>;
     return P::make([key, value](Stream& stream, auto& ctx) {
         Map out{};
@@ -2167,7 +2167,7 @@ auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexc
     using Key = parser_result_t<ParserKey>;
     using Value = parser_result_t<ParserValue>;
     using Map = std::map<Key, Value>;
-    using UCtx = UnionCtx<parser_ctx_t<ParserKey>, parser_ctx_t<ParserValue>, parser_ctx_t<ParserDelimiter>>;
+    using UCtx = UnionCtx<ParserCtx<ParserKey>, ParserCtx<ParserValue>, ParserCtx<ParserDelimiter>>;
     using P = Parser<Map, UCtx>;
     return P::make([key = std::move(tKey), value = std::move(tValue), delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) {
         Map out{};
@@ -2476,7 +2476,7 @@ auto operator*(ParserA parserA, Modify modifier) noexcept {
 template <ParserType ParserA, typename Modify>
     requires(!ParserA::nocontext)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
-    using Ctx = parser_ctx_t<ParserA>;
+    using Ctx = ParserCtx<ParserA>;
     return make_parser<Ctx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
         ModifyCallerCtx p{parser, stream, ctx};
@@ -2491,7 +2491,7 @@ auto operator*(ParserA parserA, Modify modifier) noexcept {
 
 template <ParserType ParserA, typename Modify, typename Ctx>
 auto operator*(ParserA parserA, ModifyWithContext<Modify, Ctx> modifier) noexcept {
-    using UCtx = UnionCtx<parser_ctx_t<ParserA>, Ctx>;
+    using UCtx = UnionCtx<ParserCtx<ParserA>, Ctx>;
     return make_parser<UCtx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
         if constexpr (ParserA::nocontext) {
@@ -2508,7 +2508,7 @@ template <ParserType ParserA, typename Modify>
     requires (!IsVoidCtx<typename ModifierTrait<Modify>::Ctx> && ParserA::nocontext)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
     using Ctx = typename ModifierTrait<Modify>::Ctx;
-    using UCtx = UnionCtx<parser_ctx_t<ParserA>, Ctx>;
+    using UCtx = UnionCtx<ParserCtx<ParserA>, Ctx>;
     return make_parser<UCtx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
         if constexpr (ParserA::nocontext) {

@@ -12,7 +12,7 @@ set(BENCHMARK_LIBRARIES benchmark::benchmark)
 
 file(GLOB_RECURSE BENCHMARK_SOURCE_LIST ./*.cpp)
 
-add_executable(benchmarks ${BENCHMARK_SOURCE_LIST})
+add_executable(benchmarks ${BENCHMARK_SOURCE_LIST} ../include/parsecpp/core/baseTypes.h ../include/parsecpp/core/concept.h)
 
 target_include_directories(benchmarks PRIVATE
         ${PARSECPP_INCLUDE_DIR}

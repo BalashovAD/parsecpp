@@ -1,6 +1,8 @@
 #pragma once
 
-namespace prs::details {
+#include <cstddef>
+
+namespace prs {
 
 #ifndef PRS_DISABLE_ERROR_LOG
 static constexpr bool DISABLE_ERROR_LOG = false;
@@ -9,5 +11,7 @@ static constexpr bool DISABLE_ERROR_LOG = false;
 static constexpr bool DISABLE_ERROR_LOG = true;
 #define PRS_MAKE_ERROR(strError, pos) makeError("", pos);
 #endif
+
+static constexpr size_t MAX_ITERATION = 1000000;
 
 }

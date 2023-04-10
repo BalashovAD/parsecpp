@@ -50,7 +50,7 @@ auto liftRecCtx(Fn const& fn, Stream& stream, Ctx& ctx, TupleParser const& parse
 }
 
 template <typename Fn, ParserType ...Args>
-    requires(IsVoidCtx<parser_ctx_t<Args>> && ...)
+    requires(IsVoidCtx<ParserCtx<Args>> && ...)
 auto liftM(Fn fn, Args &&...args) noexcept {
     return make_parser([fn, parsers = std::make_tuple(args...)](Stream& s) {
         return details::liftRec(fn, s, parsers);
@@ -59,9 +59,9 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 
 
 template <typename Fn, ParserType ...Args>
-    requires(!IsVoidCtx<parser_ctx_t<Args>> || ...)
+    requires(!IsVoidCtx<ParserCtx<Args>> || ...)
 auto liftM(Fn fn, Args &&...args) noexcept {
-    using Ctx = UnionCtx<parser_ctx_t<Args>...>;
+    using Ctx = UnionCtx<ParserCtx<Args>...>;
     return make_parser<Ctx>([fn, parsers = std::make_tuple(args...)](Stream& s, auto& ctx) {
         return details::liftRec(fn, s, ctx, parsers);
     });

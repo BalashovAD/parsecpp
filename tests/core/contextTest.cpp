@@ -103,7 +103,7 @@ TEST(Context, OpForget2) {
 
     char const c = 'b';
     unsigned n = 0;
-    parser_ctx_t<decltype(parser)> ctx{n, c};
+    ParserCtx<decltype(parser)> ctx{n, c};
 
     success_parsing(parser, 'b', "123bc", "c", ctx);
     EXPECT_EQ(n, 123);

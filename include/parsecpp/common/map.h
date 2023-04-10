@@ -20,10 +20,10 @@ template <bool errorInTheMiddle = true
         , ParserType ParserKey
         , ParserType ParserValue>
 auto toMap(ParserKey key, ParserValue value) noexcept {
-    using Key = parser_result_t<ParserKey>;
-    using Value = parser_result_t<ParserValue>;
+    using Key = ParserResult<ParserKey>;
+    using Value = ParserResult<ParserValue>;
     using Map = std::map<Key, Value>;
-    using UCtx = UnionCtx<parser_ctx_t<ParserKey>, parser_ctx_t<ParserValue>>;
+    using UCtx = UnionCtx<ParserCtx<ParserKey>, ParserCtx<ParserValue>>;
     using P = Parser<Map, UCtx>;
     return P::make([key, value](Stream& stream, auto& ctx) {
         Map out{};
@@ -70,10 +70,10 @@ template <bool errorInTheMiddle = true
         , ParserType ParserValue
         , ParserType ParserDelimiter>
 auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexcept {
-    using Key = parser_result_t<ParserKey>;
-    using Value = parser_result_t<ParserValue>;
+    using Key = ParserResult<ParserKey>;
+    using Value = ParserResult<ParserValue>;
     using Map = std::map<Key, Value>;
-    using UCtx = UnionCtx<parser_ctx_t<ParserKey>, parser_ctx_t<ParserValue>, parser_ctx_t<ParserDelimiter>>;
+    using UCtx = UnionCtx<ParserCtx<ParserKey>, ParserCtx<ParserValue>, ParserCtx<ParserDelimiter>>;
     using P = Parser<Map, UCtx>;
     return P::make([key = std::move(tKey), value = std::move(tValue), delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) {
         Map out{};

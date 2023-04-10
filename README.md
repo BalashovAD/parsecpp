@@ -6,16 +6,11 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 
 ## TODO List
 - [x] Add quick examples to readme
-- [ ] Installation guide, requirements
 - [ ] Add guide how to write the fastest parsers
 - [x] Add Drop control class for performance optimizations
 - [x] Disable error log by flag
 - [x] Add call stack for debug purpose
 - [x] Add custom context for parsing
-
-## Requirements
-
-It's header only library, require support c++20 standard
 
 ## Examples
 
@@ -57,6 +52,18 @@ auto parser = literal("Circle") >> spaces() >>
 Stream example{"Circle (1;-3) 4.5"};
 parser(example);
 ```
+
+
+## Installation
+
+This header only library requires a c++20 compiler.  
+You can add git submodule to your project and add `target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})`.
+
+Alternatively you can copy & paste the `single_include` headers to your include path.
+Use `all.hpp` as base parser header, `full.hpp` contains additional options and extend possibilities.
+
+Configurable parameters: `Parsecpp_DisableError`, turn it on to optimize error string, recommend for release build.
+
 
 ### Recursion 
 `Parsecpp` is a top-down parser and doesn't like left recursion. 

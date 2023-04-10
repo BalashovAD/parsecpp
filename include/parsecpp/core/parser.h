@@ -3,6 +3,8 @@
 #include <parsecpp/core/expected.h>
 #include <parsecpp/utils/funcHelper.h>
 #include <parsecpp/core/parsingError.h>
+#include <parsecpp/core/baseTypes.h>
+#include <parsecpp/core/concept.h>
 #include <parsecpp/core/context.h>
 #include <parsecpp/core/stream.h>
 
@@ -11,24 +13,13 @@
 #include <functional>
 #include <utility>
 #include <optional>
-#include <glob.h>
+//#include <glob.h>
 
 
 namespace prs {
 
-namespace details {
-
-template <class Body>
-using ResultType = Expected<Body, ParsingError>;
-
-template <typename T, ContextType Ctx = VoidContext>
-using StdFunction = std::conditional_t<IsVoidCtx<Ctx>,
-        std::function<ResultType<T>(Stream&)>, std::function<ResultType<T>(Stream&, Ctx&)>>;
-
-}
-
 template <typename T, ContextType CtxType = VoidContext, typename Func = details::StdFunction<T, CtxType>>
-//        requires std::invocable<Func, Stream&>
+        requires (IsParserFn<Func, CtxType>)
 class Parser {
 public:
     static constexpr bool nothrow = std::is_nothrow_invocable_v<Func, Stream&>;
@@ -40,8 +31,9 @@ public:
     using Ctx = CtxType;
     using Result = details::ResultType<T>;
 
-//    template <std::invocable<Stream&> Fn>
+
     template <typename Fn>
+        requires (IsParserFn<Func, Ctx>)
     constexpr static auto make(Fn &&f) noexcept {
         return Parser<T, Ctx, Fn>(std::forward<Fn>(f));
     }
@@ -340,7 +332,7 @@ public:
             requires(!std::is_same_v<T, Drop>)
     constexpr auto repeat(Delimiter tDelimiter) const noexcept {
         using Value = T;
-        using UCtx = UnionCtx<Ctx, parser_ctx_t<Delimiter>>;
+        using UCtx = UnionCtx<Ctx, ParserCtx<Delimiter>>;
         using P = Parser<std::vector<Value>, UCtx>;
         constexpr bool noexceptP = nothrow && Delimiter::nothrow;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) noexcept(noexceptP) {
@@ -377,7 +369,7 @@ public:
     template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(std::is_same_v<T, Drop>)
     constexpr auto repeat(Delimiter tDelimiter) const noexcept {
-        using UCtx = UnionCtx<Ctx, parser_ctx_t<Delimiter>>;
+        using UCtx = UnionCtx<Ctx, ParserCtx<Delimiter>>;
         using P = Parser<Drop, UCtx>;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) {
             size_t iteration = 0;
@@ -555,7 +547,7 @@ public:
         }
     }
 
-    static constexpr Result makeError(details::ParsingError error) noexcept {
+    static Result makeError(details::ParsingError error) noexcept {
         return Result{error};
     }
 
