@@ -10,7 +10,7 @@ using namespace prs;
 
 template <size_t reserve = 0, typename ParserValue>
 auto constructParserInLoopRepeat(ParserValue value) noexcept {
-    using Value = parser_result_t<ParserValue>;
+    using Value = ParserResult<ParserValue>;
     using P = Parser<std::vector<Value>>;
     return P::make([value](Stream& stream, auto& ctx) {
         std::vector<Value> ans{};
@@ -38,7 +38,7 @@ auto constructParserInLoopRepeat(ParserValue value) noexcept {
 
 template <size_t reserve = 0, typename ParserValue>
 auto doWhile(ParserValue value) noexcept {
-    using Value = parser_result_t<ParserValue>;
+    using Value = ParserResult<ParserValue>;
     using Vector = std::vector<Value>;
     return Parser<Vector>::make([parser = value](Stream& stream, auto& ctx) {
         Vector out;
@@ -62,7 +62,7 @@ auto doWhile(ParserValue value) noexcept {
 
 template <size_t reserve = 0, typename ParserValue>
 auto doWhileNoCtx(ParserValue value) noexcept {
-    using Value = parser_result_t<ParserValue>;
+    using Value = ParserResult<ParserValue>;
     using Vector = std::vector<Value>;
     return Parser<Vector>::make([parser = value](Stream& stream) {
         Vector out;
@@ -86,7 +86,7 @@ auto doWhileNoCtx(ParserValue value) noexcept {
 
 template <size_t reserve = 0, typename ParserValue>
 auto Ycomb(ParserValue value) noexcept {
-    using Value = parser_result_t<ParserValue>;
+    using Value = ParserResult<ParserValue>;
     using Vector = std::vector<Value>;
     return Parser<Vector>::make([parser = value](Stream& stream, auto& ctx) {
         std::vector<Value> ans{};
@@ -119,7 +119,7 @@ auto Ycomb(ParserValue value) noexcept {
 template <ParserType ParserT, size_t reserve = 0>
 class DoWhileTest {
 public:
-    using T = parser_result_t<ParserT>;
+    using T = ParserResult<ParserT>;
     using Vector = std::vector<T>;
     using ReturnParser = Parser<Vector>;
 

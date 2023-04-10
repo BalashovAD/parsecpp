@@ -32,7 +32,7 @@ void printError(typename Parser<T>::Result const& result, Stream const& stream) 
 
 template <typename Parser, typename Ctx = VoidContext>
 void success_parsing(Parser parser,
-        parser_result_t<Parser> const& answer,
+        ParserResult<Parser> const& answer,
         std::string const& str,
         std::string_view remaining = "",
         Ctx& ctx = VOID_CONTEXT,

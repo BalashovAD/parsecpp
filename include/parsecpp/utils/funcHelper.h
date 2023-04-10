@@ -8,43 +8,7 @@
 #include <string>
 
 
-namespace prs {
-
-
-struct Unit {
-    Unit() noexcept = default;
-
-    bool operator==(Unit const&) const noexcept {
-        return true;
-    }
-};
-
-struct Drop {
-    Drop() noexcept = default;
-
-    bool operator==(Drop const&) const noexcept {
-        return true;
-    }
-};
-
-
-template <typename Parser>
-constexpr bool is_parser_v = std::is_invocable_v<Parser, Stream&>;
-
-template <typename T>
-concept ParserType = is_parser_v<T>;
-
-
-template <ParserType Parser>
-using parser_result_t = typename std::decay_t<Parser>::Type;
-
-
-template <ParserType Parser>
-using parser_ctx_t = typename std::decay_t<Parser>::Ctx;
-
-static constexpr size_t MAX_ITERATION = 1000000;
-
-namespace details {
+namespace prs::details {
 
 struct Id {
     template<typename T>
@@ -60,8 +24,8 @@ struct Id {
 };
 
 struct ToString {
-    template<typename T>
-    requires (std::same_as<decltype(std::to_string(std::declval<T>())), std::string>)
+    template <typename T>
+        requires (std::same_as<decltype(std::to_string(std::declval<T>())), std::string>)
     std::string operator()(T const& t) const noexcept {
         return std::to_string(t);
     }
@@ -79,16 +43,16 @@ struct MakeTuple {
 template <typename T>
 struct MakeClass {
     template <class ...Args>
-    auto operator()(Args &&...args) const noexcept {
-        return T{args...};
+    decltype(auto) operator()(Args &&...args) const noexcept(std::is_nothrow_constructible_v<T, Args...>) {
+        return T{std::forward<Args>(args)...};
     }
 };
 
 template <typename T>
 struct MakeShared {
     template <class ...Args>
-    auto operator()(Args &&...args) const noexcept {
-        return std::make_shared<T>(args...);
+    auto operator()(Args &&...args) const {
+        return std::make_shared<T>(std::forward<Args>(args)...);
     }
 };
 
@@ -111,7 +75,7 @@ private:
 
 
 template <size_t pw, typename T, typename Fn>
-constexpr decltype(auto) repeatF(T t, Fn op) noexcept {
+constexpr decltype(auto) repeatF(T t, Fn op) noexcept(std::is_nothrow_invocable_v<Fn, T>) {
     if constexpr (pw == 0) {
         return t;
     } else {
@@ -119,5 +83,4 @@ constexpr decltype(auto) repeatF(T t, Fn op) noexcept {
     }
 }
 
-}
 }

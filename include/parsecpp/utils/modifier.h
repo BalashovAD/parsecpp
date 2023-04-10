@@ -11,7 +11,7 @@ public:
 };
 
 template <ParserType Parser>
-class ModifyCaller : public ModifyCallerI<parser_result_t<Parser>> {
+class ModifyCaller : public ModifyCallerI<ParserResult<Parser>> {
 public:
     ModifyCaller(Parser const& p, Stream& s) noexcept
         : m_parser(p)
@@ -27,7 +27,7 @@ private:
 
 
 template <ParserType Parser, ContextType StoredCtx>
-class ModifyCallerCtx : public ModifyCallerI<parser_result_t<Parser>> {
+class ModifyCallerCtx : public ModifyCallerI<ParserResult<Parser>> {
 public:
     ModifyCallerCtx(Parser const& p, Stream& s, StoredCtx& ctx) noexcept
         : m_parser(p)
@@ -74,7 +74,7 @@ struct ModifierTrait {
 
 
 template <ParserType ParserA, typename Modify>
-    requires(ParserA::nocontext && std::is_invocable_v<Modify, ModifyCallerI<parser_result_t<ParserA>>&, Stream&>)
+    requires(ParserA::nocontext && std::is_invocable_v<Modify, ModifyCallerI<ParserResult<ParserA>>&, Stream&>)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
     return make_parser([parser = std::move(parserA), mod = std::move(modifier)](Stream& stream) {
         ModifyCaller p{parser, stream};
@@ -86,11 +86,11 @@ auto operator*(ParserA parserA, Modify modifier) noexcept {
 template <ParserType ParserA, typename Modify>
     requires(!ParserA::nocontext)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
-    using Ctx = parser_ctx_t<ParserA>;
+    using Ctx = ParserCtx<ParserA>;
     return make_parser<Ctx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
         ModifyCallerCtx p{parser, stream, ctx};
-        if constexpr (std::is_invocable_v<Modify, ModifyCallerI<parser_result_t<ParserA>>&, Stream&>) {
+        if constexpr (std::is_invocable_v<Modify, ModifyCallerI<ParserResult<ParserA>>&, Stream&>) {
             return mod(p, stream);
         } else {
             return mod(p, stream, ctx);
@@ -101,7 +101,7 @@ auto operator*(ParserA parserA, Modify modifier) noexcept {
 
 template <ParserType ParserA, typename Modify, typename Ctx>
 auto operator*(ParserA parserA, ModifyWithContext<Modify, Ctx> modifier) noexcept {
-    using UCtx = UnionCtx<parser_ctx_t<ParserA>, Ctx>;
+    using UCtx = UnionCtx<ParserCtx<ParserA>, Ctx>;
     return make_parser<UCtx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
         if constexpr (ParserA::nocontext) {
@@ -118,7 +118,7 @@ template <ParserType ParserA, typename Modify>
     requires (!IsVoidCtx<typename ModifierTrait<Modify>::Ctx> && ParserA::nocontext)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
     using Ctx = typename ModifierTrait<Modify>::Ctx;
-    using UCtx = UnionCtx<parser_ctx_t<ParserA>, Ctx>;
+    using UCtx = UnionCtx<ParserCtx<ParserA>, Ctx>;
     return make_parser<UCtx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
         if constexpr (ParserA::nocontext) {

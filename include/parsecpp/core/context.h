@@ -1,5 +1,7 @@
 #pragma once
 
+#include <concepts>
+
 namespace prs {
 
 
@@ -42,7 +44,6 @@ class ContextWrapperT;
 template<>
 class ContextWrapperT<> {
 public:
-    static constexpr bool iscontext = true;
     static constexpr size_t size = 0;
 };
 
@@ -54,7 +55,6 @@ public:
     using Key = K;
     using TypeWrapper = TypeWrapperB<T, K>;
 
-    static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
 
     explicit ContextWrapperT(T value = T{}) noexcept
@@ -80,7 +80,6 @@ public:
     using Key = K;
     using TypeWrapper = TypeWrapperB<T&, K>;
 
-    static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
 
     explicit ContextWrapperT(T& value) noexcept
@@ -107,7 +106,6 @@ public:
     using Key = K;
     using TypeWrapper = TypeWrapperB<T const, K>;
 
-    static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
 
     explicit ContextWrapperT(T const& value = T{}) noexcept
@@ -130,7 +128,6 @@ public:
     using Key = K;
     using TypeWrapper = TypeWrapperB<T const&, K>;
 
-    static constexpr bool iscontext = true;
     static constexpr size_t size = 1;
 
     explicit ContextWrapperT(T const& value) noexcept
@@ -150,7 +147,6 @@ template <typename ...Types>
 class ContextWrapperT : public ContextWrapperT<>, public ContextWrapperT<Types> ... {
 public:
     using TupleTypes = std::tuple<Types...>;
-    static constexpr bool iscontext = true;
     static constexpr size_t size = sizeof...(Types);
 
     static_assert(size > 1);
@@ -166,12 +162,12 @@ public:
 };
 
 // utils
-template<typename T, typename = std::void_t<>>
-struct IsCtxT : std::false_type {};
-
 template<typename T>
-struct IsCtxT<T, std::enable_if_t<T::iscontext, void>>
-        : std::true_type {};
+static constexpr bool IsCtx = false;
+
+template <typename ...Args>
+static constexpr bool IsCtx<ContextWrapperT<Args...>> = true;
+
 
 
 template<size_t index, typename Tuple, typename T>
@@ -195,7 +191,7 @@ static inline VoidContext VOID_CONTEXT{};
 
 
 template<typename Ctx>
-constexpr inline bool IsCtx = details::IsCtxT<Ctx>::value;
+constexpr inline bool IsCtx = details::IsCtx<Ctx>;
 
 template<typename Ctx>
 concept ContextType = IsCtx<Ctx>;

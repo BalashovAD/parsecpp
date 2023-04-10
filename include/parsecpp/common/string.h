@@ -3,6 +3,7 @@
 #include <parsecpp/core/parser.h>
 #include <parsecpp/core/lift.h>
 #include <parsecpp/utils/funcHelper.h>
+#include <parsecpp/core/baseTypes.h>
 
 namespace prs {
 
@@ -238,7 +239,7 @@ auto literal(std::string str) noexcept {
 
 
 template <ParserType P>
-    requires (IsVoidCtx<parser_ctx_t<P>>)
+    requires (IsVoidCtx<ParserCtx<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream) {
         auto start = stream.pos();
@@ -257,7 +258,7 @@ auto search(P tParser) noexcept {
 }
 
 template <ParserType P>
-    requires (!IsVoidCtx<parser_ctx_t<P>>)
+    requires (!IsVoidCtx<ParserCtx<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream, auto& ctx) {
         auto start = stream.pos();

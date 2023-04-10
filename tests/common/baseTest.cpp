@@ -7,7 +7,7 @@ TEST(Base, ParseNumber) {
     success_parsing(parser, 4u, "4", "");
     success_parsing(parser, 4123u, "4123", "");
 
-    using NumberType = parser_result_t<decltype(parser)>;
+    using NumberType = ParserResult<decltype(parser)>;
     NumberType max = std::numeric_limits<NumberType>::max();
     success_parsing(parser, max, std::to_string(max), "");
     success_parsing(parser, 0u, "0", "");
