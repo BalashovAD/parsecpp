@@ -2,8 +2,6 @@
 
 #include <parsecpp/core/parser.h>
 #include <parsecpp/core/lift.h>
-#include <parsecpp/utils/funcHelper.h>
-#include <parsecpp/core/baseTypes.h>
 
 namespace prs {
 

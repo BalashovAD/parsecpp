@@ -1,7 +1,6 @@
 #pragma once
 
 #include <parsecpp/core/parser.h>
-#include <parsecpp/utils/funcHelper.h>
 #include <parsecpp/common/base.h>
 
 namespace prs {

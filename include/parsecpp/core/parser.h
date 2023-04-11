@@ -2,6 +2,7 @@
 
 #include <parsecpp/core/expected.h>
 #include <parsecpp/utils/funcHelper.h>
+#include <parsecpp/utils/sourceLocation.h>
 #include <parsecpp/core/parsingError.h>
 #include <parsecpp/core/baseTypes.h>
 #include <parsecpp/core/concept.h>
@@ -13,7 +14,6 @@
 #include <functional>
 #include <utility>
 #include <optional>
-//#include <glob.h>
 
 
 namespace prs {
@@ -22,8 +22,10 @@ template <typename T, ContextType CtxType = VoidContext, typename Func = details
         requires (IsParserFn<Func, CtxType>)
 class Parser {
 public:
-    static constexpr bool nothrow = std::is_nothrow_invocable_v<Func, Stream&>;
     static constexpr bool nocontext = IsVoidCtx<CtxType>;
+    static constexpr bool nothrow = std::conditional_t<nocontext && std::is_invocable_v<Func, Stream&>,
+                    std::is_nothrow_invocable<Func, Stream&>,
+                    std::is_nothrow_invocable<Func, Stream&, CtxType&>>::value;
 
     using StoredFn = std::decay_t<Func>;
 
@@ -86,8 +88,8 @@ public:
     template <typename B, typename CtxB, typename Rhs>
         requires (IsVoidCtx<UnionCtx<Ctx, CtxB>>)
     constexpr auto operator>>(Parser<B, CtxB, Rhs> rhs) const noexcept {
-        return Parser<B, VoidContext>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, Ctx, Rhs>::nothrow) {
-            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<B, Ctx, Rhs>::nothrow) {
+        return Parser<B, VoidContext>::make([lhs = *this, rhs](Stream& stream) noexcept(nothrow && Parser<B, CtxB, Rhs>::nothrow) {
+            return lhs.apply(stream).flatMap([&rhs, &stream](T const& body) noexcept(Parser<B, CtxB, Rhs>::nothrow) {
                 return rhs.apply(stream);
             });
         });
@@ -131,7 +133,7 @@ public:
     template <typename B, typename CtxB, typename Rhs>
         requires (!IsVoidCtx<UnionCtx<Ctx, CtxB>>)
     constexpr auto operator<<(Parser<B, CtxB, Rhs> rhs) const noexcept {
-        constexpr bool firstCallNoexcept = nothrow && Parser<B, Ctx, Rhs>::nothrow;
+        constexpr bool firstCallNoexcept = nothrow && Parser<B, CtxB, Rhs>::nothrow;
         return Parser<T, UnionCtx<Ctx, CtxB>>::make([lhs = *this, rhs](Stream& stream, auto& ctx) noexcept(firstCallNoexcept) {
             return lhs.apply(stream, ctx).flatMap([&rhs, &stream, &ctx](T body) noexcept(Parser<B, CtxB, Rhs>::nothrow) {
                 return rhs.apply(stream, ctx).map([mvBody = std::move(body)](auto const& _) {
@@ -212,6 +214,7 @@ public:
 
     /**
      * @def maybe :: Parser<A> -> Parser<std::optional<B>>
+     * maybe :: Parser<Drop> -> Parser<Drop>
      */
     constexpr auto maybe() const noexcept {
         if constexpr (nocontext) {

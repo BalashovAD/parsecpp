@@ -4,22 +4,25 @@
 
 namespace prs {
 
-template <typename T>
-constexpr bool IsParser = false;
-
 template <typename Fn, ContextType Ctx>
 static constexpr bool IsParserFn = std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
 
 template <typename T, ContextType Ctx, typename Fn>
-    requires (IsParserFn<Fn, Ctx>)
+requires (IsParserFn<Fn, Ctx>)
 class Parser;
 
-template <typename T, ContextType Ctx, typename Fn>
-constexpr bool IsParser<Parser<T, Ctx, Fn>> = true;
-
+namespace details {
 
 template <typename T>
-concept ParserType = IsParser<T>;
+constexpr inline bool IsParserC = false;
+
+template <typename T, typename Ctx, typename Fn>
+constexpr inline bool IsParserC<Parser<T, Ctx, Fn>> = true;
+
+}
+
+template <typename T>
+concept ParserType = details::IsParserC<std::decay_t<T>>;
 
 
 template <ParserType Parser>

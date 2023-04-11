@@ -191,7 +191,7 @@ static inline VoidContext VOID_CONTEXT{};
 
 
 template<typename Ctx>
-constexpr inline bool IsCtx = details::IsCtx<Ctx>;
+constexpr inline bool IsCtx = details::IsCtx<std::decay_t<Ctx>>;
 
 template<typename Ctx>
 concept ContextType = IsCtx<Ctx>;

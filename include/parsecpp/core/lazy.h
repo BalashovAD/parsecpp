@@ -2,8 +2,6 @@
 
 #include <parsecpp/core/parser.h>
 
-#include <concepts>
-
 namespace prs {
 
 template <std::invocable Fn>
