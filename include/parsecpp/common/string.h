@@ -237,7 +237,7 @@ auto literal(std::string str) noexcept {
 
 
 template <ParserType P>
-    requires (IsVoidCtx<ParserCtx<P>>)
+    requires (IsVoidCtx<GetParserCtx<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream) {
         auto start = stream.pos();
@@ -256,7 +256,7 @@ auto search(P tParser) noexcept {
 }
 
 template <ParserType P>
-    requires (!IsVoidCtx<ParserCtx<P>>)
+    requires (!IsVoidCtx<GetParserCtx<P>>)
 auto search(P tParser) noexcept {
     return P::make([parser = std::move(tParser)](Stream& stream, auto& ctx) {
         auto start = stream.pos();

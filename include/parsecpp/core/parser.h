@@ -335,7 +335,7 @@ public:
             requires(!std::is_same_v<T, Drop>)
     constexpr auto repeat(Delimiter tDelimiter) const noexcept {
         using Value = T;
-        using UCtx = UnionCtx<Ctx, ParserCtx<Delimiter>>;
+        using UCtx = UnionCtx<Ctx, GetParserCtx<Delimiter>>;
         using P = Parser<std::vector<Value>, UCtx>;
         constexpr bool noexceptP = nothrow && Delimiter::nothrow;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) noexcept(noexceptP) {
@@ -372,7 +372,7 @@ public:
     template <size_t maxIteration = MAX_ITERATION, ParserType Delimiter>
             requires(std::is_same_v<T, Drop>)
     constexpr auto repeat(Delimiter tDelimiter) const noexcept {
-        using UCtx = UnionCtx<Ctx, ParserCtx<Delimiter>>;
+        using UCtx = UnionCtx<Ctx, GetParserCtx<Delimiter>>;
         using P = Parser<Drop, UCtx>;
         return P::make([value = *this, delimiter = std::move(tDelimiter)](Stream& stream, auto& ctx) {
             size_t iteration = 0;

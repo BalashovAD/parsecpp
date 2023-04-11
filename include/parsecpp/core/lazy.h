@@ -23,8 +23,8 @@ template <typename tag, typename Fn>
 class LazyCached {
 public:
     using P = std::invoke_result_t<Fn>;
-    using ParserResult = ParserResult<P>;
-    static constexpr bool nocontext = IsVoidCtx<ParserCtx<P>>;
+    using ParserResult = GetParserResult<P>;
+    static constexpr bool nocontext = IsVoidCtx<GetParserCtx<P>>;
 
     explicit LazyCached(Fn const& generator) noexcept {
         if (!insideWork) { // cannot use optional.has_value() because generator() invoke ctor before optional::emplace
