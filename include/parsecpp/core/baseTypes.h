@@ -1,5 +1,6 @@
 #pragma once
 
+#include <parsecpp/core/stream.h>
 #include <parsecpp/core/concept.h>
 #include <parsecpp/core/context.h>
 

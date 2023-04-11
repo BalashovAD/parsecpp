@@ -108,9 +108,7 @@ public:
 
         std::ostringstream stream;
         stream << "Parse error in pos: " << error.pos;
-        if constexpr (DISABLE_ERROR_LOG) {
-            stream << ", dsc: optimized";
-        } else {
+        if constexpr (!DISABLE_ERROR_LOG) {
             stream << ", dsc: " << error.description;
         }
         if constexpr (printAfter + printBefore > 0) {
