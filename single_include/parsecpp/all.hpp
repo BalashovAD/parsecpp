@@ -883,9 +883,9 @@ constexpr inline bool IsParserC<Parser<T, Ctx, Fn>> = true;
 template <typename T>
 concept ParserType = details::IsParserC<std::decay_t<T>>;
 
-//
-//template <ParserType Parser>
-//using ParserResult = typename std::decay_t<Parser>::Type;
+
+template <ParserType Parser>
+using ParserResult = typename std::decay_t<Parser>::Type;
 
 
 template <ParserType Parser>
