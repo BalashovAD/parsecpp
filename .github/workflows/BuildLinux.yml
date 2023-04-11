@@ -42,14 +42,14 @@ jobs:
 
     - name: Dir
       working-directory: ${{github.workspace}}/build_release
-      run: ls -la && ls -la benchmark
+      run: ls -la && ls -la benchmarks
 
     - name: Test
       working-directory: ${{github.workspace}}/build_release/tests
       run: ./unit-tests
 
     - name: Benchmark
-      working-directory: ${{github.workspace}}/build_release/benchmark
+      working-directory: ${{github.workspace}}/build_release/benchmarks
       run: ./benchmarks
 
     - name: Example calc
