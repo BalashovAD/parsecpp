@@ -30,9 +30,8 @@ jobs:
 
     - if: steps.verify-amalgamate.outputs.files_changed == 'true'
       run: |
-        echo '::warning:: Single include files were not generated, use amalgamate.sh'
-        stopMarker=$(uuidgen)
-        echo '::stop-commands::$stopMarker'
+        echo '::error:: Single include files were not generated, use amalgamate.sh'
+        exit 1
 
     - name: Configure CMake Release
       run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=OFF
