@@ -11,7 +11,7 @@ using namespace prs;
 // ctx >>
 template <typename ParserA, typename ParserB>
 auto ctxCombine(ParserA a, ParserB b) noexcept {
-    using B = ParserResult<ParserB>;
+    using B = GetParserResult<ParserB>;
     return Parser<B, VoidContext>::make([a, b](Stream& stream, auto& ctx) {
         return a.apply(stream, ctx).flatMap([&b, &stream, &ctx](auto const& body) {
             return b.apply(stream, ctx);

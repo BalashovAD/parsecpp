@@ -26,10 +26,10 @@ concept ParserType = details::IsParserC<std::decay_t<T>>;
 
 
 template <ParserType Parser>
-using ParserResult = typename std::decay_t<Parser>::Type;
+using GetParserResult = typename std::decay_t<Parser>::Type;
 
 
 template <ParserType Parser>
-using ParserCtx = typename std::decay_t<Parser>::Ctx;
+using GetParserCtx = typename std::decay_t<Parser>::Ctx;
 
 }
