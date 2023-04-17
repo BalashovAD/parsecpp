@@ -148,11 +148,11 @@ public:
      * <$>, fmap operator
      * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
-    template <std::invocable<T> ListFn>
+    template <typename ListFn>
         requires(nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
-        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
-           return lhs.apply(stream, ctx).map(fn);
+        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream) {
+           return lhs.apply(stream).map(fn);
         });
     }
 
@@ -457,6 +457,24 @@ public:
         return Parser<T, Ctx>::make([parser = *this, test](Stream& stream, auto& ctx) {
            return parser.apply(stream, ctx).flatMap([&test, &stream](T t) {
                if (test(t, stream)) {
+                   return Parser<T>::data(std::move(t));
+               } else {
+                   return Parser<T>::makeError("Cond failed", stream.pos());
+               }
+           });
+        });
+    }
+
+
+    /**
+     * @def cond :: Parser<A, Ctx> -> (A -> CondCtx& -> bool) -> Parser<A, Ctx & CondCtx>
+     */
+    template <ContextType CondContext, std::predicate<T const&, CondContext&> Fn>
+    constexpr auto condC(Fn test) const noexcept {
+        using UCtx = UnionCtx<Ctx, CondContext>;
+        return Parser<T, UCtx>::make([parser = *this, test](Stream& stream, auto& ctx) {
+           return parser.apply(stream, ctx).flatMap([&](T t) {
+               if (test(t, ctx)) {
                    return Parser<T>::data(std::move(t));
                } else {
                    return Parser<T>::makeError("Cond failed", stream.pos());

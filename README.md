@@ -6,11 +6,11 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 
 ## TODO List
 - [x] Add quick examples to readme
-- [ ] Add guide how to write the fastest parsers
-- [x] Add Drop control class for performance optimizations
 - [x] Disable error log by flag
+- [x] Add Drop control class for performance optimizations
 - [x] Add call stack for debug purpose
 - [x] Add custom context for parsing
+- [ ] Add guide how to write the fastest parsers
 
 ## Examples
 
@@ -57,20 +57,21 @@ parser(example);
 ## Installation
 
 This header only library requires a c++20 compiler.  
-You can add git submodule to your project and add `target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})`.
+You can include this library as a git submodule in your project and add 
+`target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})` to your CMakeLists.txt file.
 
-Alternatively you can copy & paste the `single_include` headers to your include path.
-Use `all.hpp` as base parser header, `full.hpp` contains additional options and extend possibilities.
+Alternatively, you can copy & paste the `single_include` headers to your project's include path.
+Use `all.hpp` as the base parser header, while `full.hpp` contains some extra options.
 
-Configurable parameters: `Parsecpp_DisableError`, turn it on to optimize error string, recommend for release build.
-
+There is also a configurable parameter, `Parsecpp_DisableError`, 
+that you can turn on to optimize error string. `-DParsecpp_DisableError=ON`
+This is recommended for release builds.
 
 ### Recursion 
 `Parsecpp` is a top-down parser and doesn't like left recursion. 
 Furthermore, building your combinator parser with direct recursion would cause a stack overflow before parsing.  
-Use `lazy(makeParser)`, `lazyCached`, `lazyForget` functions that will end the loop while building.
+Use `lazy`, `lazyCached`, `lazyForget` functions that will end the loop while building.
 Refer to `benchmark/lazyBenchmark.cpp` for more details.
-
 
 To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
 See `examples/calc`.
@@ -100,14 +101,14 @@ parser(example);
 #### LazyCached
 
 Make one instance of recursive parser in preparing time. It's a much faster way to make recursive parsers. 
-But result parser (`Parser'<T>`) must be pure (doesn't have mutable states inside), 
+But result parser (`Parser'<T>`) must have no mutable states inside, 
 and allow to be called recursively for one instance. 
 Also, because `LazyCached` type dependence on `Fn` that dependence on `Parser<T>`,
 the generator cannot use `decltype(auto)` for return type. So, usually, the generator should use `toCommonType` for type erasing.
 
 #### LazyForget
 
-This is an improved version of `lazyCached` without type erasing.
+This is an improved version of `lazyCached` without slow type erasing.
 `LazyForget` only depends on the parser result type and doesn't create a recursive type. 
 You need to specify return type manually with `decltype(X)`, where `X` is value in `return` with changed `lazyForget<R>(f)` to
 `std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
@@ -115,7 +116,7 @@ This code is slightly faster when `lazyCached`, but code looks harder to read an
 
 
 #### Tag in lazy*
-The `Tag` type must be unique for any difference call of `lazyCached` function. 
+The `Tag` type must be unique for any difference call of `lazyCached`, `lazyForget` function. 
 For cases where you call `lazyCached` only once per line, you can use the default parameter `AutoTag`. 
 If you are unsure, specialize `Tag` type manually. Be careful with func helpers that cover the auto tag parameter.
 For example the following code won't work correctly:
@@ -147,19 +148,19 @@ auto lazyCached(Fn const&) noexcept(Fn);
 ```c++
 Parser<Unit> bracesLazy() noexcept {
     return (concat(charFrom('(', '{', '['), lazy(bracesLazy) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<5>() >> success()).toCommonType();
+        .cond(checkBraces).repeat() >> success()).toCommonType();
 }
 
 Parser<Unit> bracesCache() noexcept {
     return (concat(charFrom('(', '{', '['), lazyCached(bracesCache) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<5>() >> success()).toCommonType();
+        .cond(checkBraces).repeat() >> success()).toCommonType();
 }
 
 auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<5>() >> success())) {
+        .cond(checkBraces).repeat() >> success())) {
 
     return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<5>() >> success());
+        .cond(checkBraces).repeat() >> success());
 }
 ```
 
@@ -188,9 +189,33 @@ which is a common type for all `Parser<A, Ctx>`.
 `Drop` is special class, and we assume that `A != Drop`.  
 
 ### Context
-// TODO 
-Context type `CtxA & CtxB` is shorthand for `UnionCtx<CtxA, CtxB>`. 
-In opposite to common `union`, `UnionCtx` depends on the argument sequence. 
+
+The library is designed for high performance and efficiency, 
+so parsers should be built once and only called during the active phase. 
+To capture dynamically changing variables, you can add context to your parser. 
+For example, if you need to process only lines with `ts >= ts0`, 
+you can see the `example/quick.cpp` file for an example of how to use context.
+```c++
+// Created once
+using TsContext = ContextWrapper<Timestamp const&>;
+auto parser = skipToNext(concat(parserTS.condC<TsContext>([](Timestapm const& ts, TsContext& ctx) {
+    return ts >= ctx.get();
+}), parserData), searchText("\n")).repeat(); // std::vector<std::tuple<Timestamp, Data>>
+
+// ...
+// use
+TsContext ctx{ts0};
+parser(stream, ctx).map([](std::vector<std::tuple<Timestamp, Data>> const& result) {
+    // ...
+});
+```
+
+In addition, context can be used to store the parser's side effect to a mutable variable. 
+Often, this is a cleaner way than capturing a lot of variables by link in lambdas at creation time. 
+For example, see the `Debug` section and `debug::DebugContext`.
+
+Context type `CtxA & CtxB` is shorthand for `UnionCtx<CtxA, CtxB>`.
+Unlike the common `union`, `UnionCtx` depends on the argument sequence. 
 For example, `ContextWrapper<char, unsigned> := UnionCtx<char, unsigned> != UnionCtx<unsigned, char> =: ContextWrapper<unsigned, char>` 
 
 ### Converting to a Common Type

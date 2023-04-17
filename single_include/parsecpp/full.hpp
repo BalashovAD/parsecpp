@@ -19,14 +19,8 @@ namespace prs::details {
 
 struct Id {
     template<typename T>
-    T operator()(T t) const noexcept {
-        return t;
-    }
-
-
-    template<typename T>
-    T operator()(T const& t) const noexcept {
-        return t;
+    auto operator()(T&& t) const noexcept {
+        return std::forward<T>(t);
     }
 };
 
@@ -140,9 +134,9 @@ public:
         : m_isError(e.m_isError) {
 
         if (isError()) {
-            new (&m_error)T(e.m_error);
+            new (&m_error)Error(e.m_error);
         } else {
-            new (&m_data)Error(e.m_data);
+            new (&m_data)T(e.m_data);
         }
     }
 
@@ -487,7 +481,6 @@ public:
         return m_currentStr.empty();
     }
 
-
     template<std::predicate<char> Fn>
     char checkFirst(Fn const& test) noexcept(std::is_nothrow_invocable_v<Fn, char>) {
         if (eos()) {
@@ -557,10 +550,17 @@ private:
 // #include <parsecpp/core/concept.h>
 
 
+// #include <parsecpp/core/forward.h>
+
+
 // #include <parsecpp/core/context.h>
 
 
 #include <concepts>
+
+#include <cstddef>
+#include <tuple>
+#include <utility>
 
 namespace prs {
 
@@ -861,15 +861,62 @@ decltype(auto) get(Ctx& ctx) noexcept {
 
 }
 
+// #include <parsecpp/core/parsingError.h>
+
+
+#include <functional>
 
 namespace prs {
 
+class Stream;
 template <typename Fn, ContextType Ctx>
 static constexpr bool IsParserFn = std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
 
 template <typename T, ContextType Ctx, typename Fn>
 requires (IsParserFn<Fn, Ctx>)
 class Parser;
+
+
+static constexpr size_t COMMON_PARSER_SIZE = sizeof(std::function<void(void)>);
+
+template <typename L, typename R>
+    requires(!std::same_as<std::decay_t<L>, std::decay_t<R>>)
+class Expected;
+
+template <typename T, typename Ctx = VoidContext>
+class Pimpl {
+public:
+    Pimpl() = delete;
+
+    template <typename ParserType>
+    Pimpl(ParserType t) noexcept;
+
+    ~Pimpl();
+
+    Expected<T, details::ParsingError> operator()(Stream& s, Ctx& ctx) const;
+private:
+    alignas(std::function<void(void)>) std::byte m_storage[COMMON_PARSER_SIZE];
+};
+
+
+template <typename T>
+class Pimpl<T, VoidContext> {
+public:
+    Pimpl() = delete;
+
+    template <typename ParserType>
+    Pimpl(ParserType t) noexcept;
+
+    ~Pimpl();
+
+    Expected<T, details::ParsingError> operator()(Stream& s) const;
+private:
+    alignas(std::function<void(void)>) std::byte m_storage[COMMON_PARSER_SIZE];
+};
+
+}
+
+namespace prs {
 
 namespace details {
 
@@ -1077,11 +1124,11 @@ public:
      * <$>, fmap operator
      * @def `>>=` :: Parser<A> -> (A -> B) -> Parser<B>
      */
-    template <std::invocable<T> ListFn>
+    template <typename ListFn>
         requires(nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
-        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
-           return lhs.apply(stream, ctx).map(fn);
+        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream) {
+           return lhs.apply(stream).map(fn);
         });
     }
 
@@ -1394,6 +1441,24 @@ public:
         });
     }
 
+
+    /**
+     * @def cond :: Parser<A, Ctx> -> (A -> CondCtx& -> bool) -> Parser<A, Ctx & CondCtx>
+     */
+    template <ContextType CondContext, std::predicate<T const&, CondContext&> Fn>
+    constexpr auto condC(Fn test) const noexcept {
+        using UCtx = UnionCtx<Ctx, CondContext>;
+        return Parser<T, UCtx>::make([parser = *this, test](Stream& stream, auto& ctx) {
+           return parser.apply(stream, ctx).flatMap([&](T t) {
+               if (test(t, ctx)) {
+                   return Parser<T>::data(std::move(t));
+               } else {
+                   return Parser<T>::makeError("Cond failed", stream.pos());
+               }
+           });
+        });
+    }
+
     /**
      * @def Drop :: Parser<A> -> Parser<Drop>
      */
@@ -1512,6 +1577,65 @@ private:
 }
 
 
+// #include <parsecpp/core/forwardImpl.h>
+
+
+// #include <parsecpp/core/parser.h>
+
+// #include <parsecpp/core/forward.h>
+
+
+namespace prs {
+
+
+template <typename T, typename Ctx>
+template <typename ParserType>
+Pimpl<T, Ctx>::Pimpl(ParserType t) noexcept {
+    static_assert(std::is_same_v<std::decay_t<ParserType>, Parser<T, Ctx>>, "Pimpl can store only Common parser type");
+    static_assert(sizeof(t) == sizeof(m_storage));
+    static_assert(alignof(ParserType) == alignof(std::function<void(void)>));
+    new (&m_storage) ParserType(t);
+}
+
+
+template <typename T>
+template <typename ParserType>
+Pimpl<T, VoidContext>::Pimpl(ParserType t) noexcept {
+    static_assert(std::is_same_v<std::decay_t<ParserType>, Parser<T>>, "Pimpl can store only Common parser type");
+    static_assert(sizeof(t) == sizeof(m_storage));
+    static_assert(alignof(ParserType) == alignof(std::function<void(void)>));
+    new (&m_storage)ParserType(t);
+}
+
+
+template <typename T, typename Ctx>
+Pimpl<T, Ctx>::~Pimpl() {
+    using P = Parser<T, Ctx>;
+    std::destroy_at(std::launder(reinterpret_cast<P*>(&m_storage)));
+}
+
+
+template <typename T>
+Pimpl<T>::~Pimpl() {
+    using P = Parser<T>;
+    std::destroy_at(std::launder(reinterpret_cast<P*>(&m_storage)));
+}
+
+
+template<typename T, typename Ctx>
+Expected<T, details::ParsingError> Pimpl<T, Ctx>::operator()(Stream& s, Ctx& ctx) const {
+    using P = Parser<T, Ctx>;
+    return reinterpret_cast<P const&>(m_storage).apply(s, ctx);
+}
+
+
+template<typename T>
+Expected<T, details::ParsingError> Pimpl<T, VoidContext>::operator()(Stream& s) const {
+    using P = Parser<T>;
+    return reinterpret_cast<P const&>(m_storage).apply(s);
+}
+
+}
 // #include <parsecpp/core/lazy.h>
 
 
@@ -1777,7 +1901,7 @@ template <typename Fn, ParserType ...Args>
 auto liftM(Fn fn, Args &&...args) noexcept {
     using Ctx = UnionCtx<GetParserCtx<Args>...>;
     return make_parser<Ctx>([fn, parsers = std::make_tuple(args...)](Stream& s, auto& ctx) {
-        return details::liftRec(fn, s, ctx, parsers);
+        return details::liftRecCtx(fn, s, ctx, parsers);
     });
 }
 
@@ -1798,11 +1922,10 @@ constexpr auto satisfy(Fn&& tTest) noexcept {
 }
 
 }
+// #include <parsecpp/core/modifier.h>
 
-// #include <parsecpp/utils/modifier.h>
 
-
-// #include <parsecpp/core/parser.h>
+// #include "parser.h"
 
 
 namespace prs {
@@ -1810,6 +1933,7 @@ namespace prs {
 template <typename T>
 class ModifyCallerI {
 public:
+    using Type = T;
     virtual details::ResultType<T> operator()() = 0;
 };
 
@@ -2340,6 +2464,50 @@ auto literal(std::string str) noexcept {
 }
 
 
+}
+// #include <parsecpp/common/process.h>
+
+
+// #include <parsecpp/core/parser.h>
+
+// #include <parsecpp/core/modifier.h>
+
+
+namespace prs {
+
+/**
+ * skipNext :: Parser<A> -> Parser<Skip> -> Parser<A>
+ */
+template <ParserType ParserData, ParserType Skip>
+auto skipToNext(ParserData data, Skip skip) noexcept {
+    using UCtx = UnionCtx<GetParserCtx<ParserData>, GetParserCtx<Skip>>;
+    if constexpr (IsVoidCtx<UCtx>) {
+        return ParserData::make([data, skip](Stream& stream) {
+            do {
+                auto result = data(stream);
+                if (!result.isError()) {
+                    return result;
+                }
+            } while (!skip(stream).isError());
+            return ParserData::makeError("Cannot find next item", stream.pos());
+        });
+    } else {
+        return Parser<GetParserResult<ParserData>, UCtx>::make([data, skip](Stream& stream, UCtx& ctx) {
+            do {
+                auto result = data(stream, ctx);
+                if (!result.isError()) {
+                    return std::move(result);
+                }
+            } while (!skip(stream, ctx).isError());
+            return ParserData::makeError("Cannot find next item", stream.pos());
+        });
+    }
+}
+
+
+/**
+ * search :: Parser<A> -> Parser<A>
+ */
 template <ParserType P>
     requires (IsVoidCtx<GetParserCtx<P>>)
 auto search(P tParser) noexcept {
@@ -2359,6 +2527,7 @@ auto search(P tParser) noexcept {
     });
 }
 
+
 template <ParserType P>
     requires (!IsVoidCtx<GetParserCtx<P>>)
 auto search(P tParser) noexcept {
@@ -2376,6 +2545,108 @@ auto search(P tParser) noexcept {
         stream.restorePos(start);
         return P::makeError("Cannot find", stream.pos());
     });
+}
+
+
+template <typename Derived, typename Container, ContextType Ctx>
+class Repeat {
+public:
+    Repeat() noexcept = default;
+
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) noexcept {
+        using P = Parser<typename std::decay_t<decltype(parser)>::Type, Ctx>;
+
+        get().init();
+        size_t iteration = 0;
+        auto backup = stream.pos();
+        do {
+            backup = stream.pos();
+            auto result = parser();
+            if (!result.isError()) {
+                get().add(std::move(result).data(), ctx);
+            } else {
+                stream.restorePos(backup);
+                return P::data(get().value());
+            }
+        } while (++iteration != MAX_ITERATION);
+
+        return P::makeError("Max iteration", stream.pos());
+    }
+
+private:
+    Derived& get() noexcept {
+        return static_cast<Derived&>(*this);
+    }
+
+//
+//    template<class T>
+//    void add(T t, Ctx& ctx) {
+//        if constexpr ()
+//    }
+};
+
+
+template <typename Derived, typename ContainerT>
+class Repeat<Derived, ContainerT, VoidContext> {
+public:
+    using Container = ContainerT;
+
+    Repeat() noexcept = default;
+
+    auto operator()(auto& parser, Stream& stream) const noexcept {
+        using P = Parser<Container>;
+
+        decltype(auto) container = get().init();
+        size_t iteration = 0;
+        auto backup = stream.pos();
+        do {
+            backup = stream.pos();
+            auto result = parser();
+            if (!result.isError()) {
+                get().add(container, std::move(result).data());
+            } else {
+                stream.restorePos(backup);
+                return P::data(std::move(container));
+            }
+        } while (++iteration != MAX_ITERATION);
+
+        return P::makeError("Max iteration", stream.pos());
+    }
+
+protected:
+    Container init() const noexcept {
+        return {};
+    }
+
+private:
+    Derived const& get() const noexcept {
+        return static_cast<Derived const&>(*this);
+    }
+};
+
+
+template <typename Fn>
+class ProcessRepeat : public Repeat<ProcessRepeat<Fn>, Unit, VoidContext> {
+public:
+    explicit ProcessRepeat(Fn fn) noexcept(std::is_nothrow_move_constructible_v<Fn>)
+        : m_fn(std::move(fn)) {
+
+    }
+
+
+    template <typename T>
+    void add(Unit, T&& t) const noexcept(std::is_nothrow_invocable_v<Fn, T>) {
+        m_fn(std::forward<T>(t));
+    }
+
+private:
+    Fn m_fn;
+};
+
+
+template <typename Fn>
+auto processRepeat(Fn fn) {
+    return ProcessRepeat<std::decay_t<Fn>>{fn};
 }
 
 }
@@ -2559,7 +2830,7 @@ Finally(Fn) -> Finally<std::decay_t<Fn>>;
 
 // #include <parsecpp/core/parser.h>
 
-// #include <parsecpp/utils/modifier.h>
+// #include "parsecpp/core/modifier.h"
 
 // #include <parsecpp/utils/cmp.h>
 

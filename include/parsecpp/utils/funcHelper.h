@@ -9,14 +9,8 @@ namespace prs::details {
 
 struct Id {
     template<typename T>
-    T operator()(T t) const noexcept {
-        return t;
-    }
-
-
-    template<typename T>
-    T operator()(T const& t) const noexcept {
-        return t;
+    auto operator()(T&& t) const noexcept {
+        return std::forward<T>(t);
     }
 };
 

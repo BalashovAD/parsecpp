@@ -65,7 +65,6 @@ public:
         return m_currentStr.empty();
     }
 
-
     template<std::predicate<char> Fn>
     char checkFirst(Fn const& test) noexcept(std::is_nothrow_invocable_v<Fn, char>) {
         if (eos()) {

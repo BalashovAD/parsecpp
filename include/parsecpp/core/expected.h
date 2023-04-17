@@ -49,9 +49,9 @@ public:
         : m_isError(e.m_isError) {
 
         if (isError()) {
-            new (&m_error)T(e.m_error);
+            new (&m_error)Error(e.m_error);
         } else {
-            new (&m_data)Error(e.m_data);
+            new (&m_data)T(e.m_data);
         }
     }
 

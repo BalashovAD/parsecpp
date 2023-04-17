@@ -62,7 +62,7 @@ template <typename Fn, ParserType ...Args>
 auto liftM(Fn fn, Args &&...args) noexcept {
     using Ctx = UnionCtx<GetParserCtx<Args>...>;
     return make_parser<Ctx>([fn, parsers = std::make_tuple(args...)](Stream& s, auto& ctx) {
-        return details::liftRec(fn, s, ctx, parsers);
+        return details::liftRecCtx(fn, s, ctx, parsers);
     });
 }
 
