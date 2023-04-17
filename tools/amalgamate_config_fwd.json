@@ -1,0 +1,8 @@
+{
+    "project": "Parsecpp",
+    "target": "single_include/parsecpp/fwd.hpp",
+    "sources": [
+        "include/parsecpp/fwd.hpp"
+    ],
+    "include_paths": ["include"]
+}

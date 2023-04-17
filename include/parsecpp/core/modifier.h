@@ -1,12 +1,13 @@
 #pragma once
 
-#include <parsecpp/core/parser.h>
+#include "parser.h"
 
 namespace prs {
 
 template <typename T>
 class ModifyCallerI {
 public:
+    using Type = T;
     virtual details::ResultType<T> operator()() = 0;
 };
 

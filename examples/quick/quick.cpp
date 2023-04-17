@@ -83,12 +83,40 @@ void contextSimple() {
     });
 }
 
+void filter() {
+    using Ctx = ContextWrapper<unsigned const>;
+    const auto parser = skipToNext(concat(number<unsigned>().condC<Ctx>([](unsigned n, Ctx& ctx) {
+        return n >= ctx.get();
+    }), literal("-") >> until('\n') << charFrom('\n')), searchText("\n")).repeat().cond([](auto const& vector) {
+        return vector.size() == 2;
+    });
+
+
+    unsigned border = 4;
+    Ctx ctx{border};
+    Stream example{R"(1-a
+3-c
+11-s
+4-dd
+)"};
+    parser(example, ctx).join([](std::vector<std::tuple<unsigned, std::string_view>> const& result) {
+        std::cout << "Filter parsed: "
+                << get<0>(result[0]) << get<1>(result[0]) << "|"
+                << get<0>(result[1]) << get<1>(result[1]) << std::endl;
+    }, [&example](auto const& error) {
+        std::cout << "Error: " << example.generateErrorText(error) << std::endl;
+    });
+}
+
+
+
 int main() {
 
     hello();
     circle();
     recursion();
     contextSimple();
+    filter();
 
     return 0;
 }

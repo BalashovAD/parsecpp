@@ -1,15 +1,8 @@
 #pragma once
 
-#include <parsecpp/core/context.h>
+#include <parsecpp/core/forward.h>
 
 namespace prs {
-
-template <typename Fn, ContextType Ctx>
-static constexpr bool IsParserFn = std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
-
-template <typename T, ContextType Ctx, typename Fn>
-requires (IsParserFn<Fn, Ctx>)
-class Parser;
 
 namespace details {
 

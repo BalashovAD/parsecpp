@@ -49,6 +49,25 @@ void success_parsing(Parser parser,
 }
 
 template <typename Parser, typename Ctx = VoidContext>
+void expect_throw(Parser parser,
+        std::string const& str,
+        std::string_view text = "",
+        Ctx& ctx = VOID_CONTEXT,
+        details::SourceLocation sourceLocation = details::SourceLocation::current()) {
+    Stream s{str};
+
+    try {
+        auto result = parser.apply(s, ctx);
+        printError<typename Parser::Type>(result, s);
+        FAIL() << "No exception. Test: " << sourceLocation.prettyPrint();
+    } catch (std::exception const& e) {
+        if (!text.empty()) {
+            EXPECT_EQ(e.what(), text) << "Test: " << sourceLocation.prettyPrint();
+        }
+    }
+}
+
+template <typename Parser, typename Ctx = VoidContext>
 void failed_parsing(Parser parser,
                     size_t pos,
                     std::string_view str,
@@ -79,4 +98,11 @@ auto addContext() {
     } else {
         return addContext<N - 1>() >> parser;
     }
+}
+
+
+inline auto exceptionParser(std::string const& text = "t") {
+    return Parser<Unit>::make([text](Stream&) -> Parser<Unit>::Result {
+        throw std::runtime_error(text);
+    });
 }

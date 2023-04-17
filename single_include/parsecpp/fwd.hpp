@@ -1,5 +1,11 @@
 #pragma once
 
+// #include <parsecpp/core/forward.h>
+
+
+// #include <parsecpp/core/context.h>
+
+
 #include <concepts>
 
 #include <cstddef>
@@ -302,5 +308,91 @@ decltype(auto) get(Ctx& ctx) noexcept {
     }
 }
 
+
+}
+
+// #include <parsecpp/core/parsingError.h>
+
+
+// #include <parsecpp/core/buildParams.h>
+
+
+#include <cstddef>
+
+namespace prs {
+
+#ifndef PRS_DISABLE_ERROR_LOG
+static constexpr bool DISABLE_ERROR_LOG = false;
+#define PRS_MAKE_ERROR(strError, pos) makeError(strError, pos);
+#else
+static constexpr bool DISABLE_ERROR_LOG = true;
+#define PRS_MAKE_ERROR(strError, pos) makeError("", pos);
+#endif
+
+static constexpr size_t MAX_ITERATION = 1000000;
+
+}
+
+#include <string>
+
+namespace prs::details {
+
+struct ParsingError {
+    std::string description;
+    size_t pos{};
+};
+
+
+}
+
+#include <functional>
+
+namespace prs {
+
+class Stream;
+template <typename Fn, ContextType Ctx>
+static constexpr bool IsParserFn = std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
+
+template <typename T, ContextType Ctx, typename Fn>
+requires (IsParserFn<Fn, Ctx>)
+class Parser;
+
+
+static constexpr size_t COMMON_PARSER_SIZE = sizeof(std::function<void(void)>);
+
+template <typename L, typename R>
+    requires(!std::same_as<std::decay_t<L>, std::decay_t<R>>)
+class Expected;
+
+template <typename T, typename Ctx = VoidContext>
+class Pimpl {
+public:
+    Pimpl() = delete;
+
+    template <typename ParserType>
+    Pimpl(ParserType t) noexcept;
+
+    ~Pimpl();
+
+    Expected<T, details::ParsingError> operator()(Stream& s, Ctx& ctx) const;
+private:
+    alignas(std::function<void(void)>) std::byte m_storage[COMMON_PARSER_SIZE];
+};
+
+
+template <typename T>
+class Pimpl<T, VoidContext> {
+public:
+    Pimpl() = delete;
+
+    template <typename ParserType>
+    Pimpl(ParserType t) noexcept;
+
+    ~Pimpl();
+
+    Expected<T, details::ParsingError> operator()(Stream& s) const;
+private:
+    alignas(std::function<void(void)>) std::byte m_storage[COMMON_PARSER_SIZE];
+};
 
 }
