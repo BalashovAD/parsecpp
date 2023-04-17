@@ -197,6 +197,8 @@ template <typename ...Args>
 using ContextWrapper = details::ContextWrapperT<details::ConvertToTypeWrapper<Args>...>;
 
 using VoidContext = ContextWrapper<>;
+
+[[maybe_unused]]
 static inline VoidContext VOID_CONTEXT{};
 
 
