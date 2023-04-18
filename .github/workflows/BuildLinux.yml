@@ -30,7 +30,6 @@ jobs:
 
     - if: steps.verify-amalgamate.outputs.files_changed == 'true'
       run: |
-        echo '::debug:: Changed files: ${{ steps.verify-amalgamate.outputs.changed_files }}'
         echo '::error:: Single include files were not generated, use amalgamate.sh'
         exit 1
 

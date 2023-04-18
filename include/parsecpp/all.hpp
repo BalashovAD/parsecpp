@@ -1,5 +1,6 @@
 #pragma once
 
+#include <parsecpp/core/forward.h>
 #include <parsecpp/core/parser.h>
 
 #include <parsecpp/core/forwardImpl.h>
