@@ -1,5 +1,9 @@
 #pragma once
 
+// Needs for the correct single_include generation
+#ifndef PARSECPP_FORWARD_H_GUARD
+#define PARSECPP_FORWARD_H_GUARD
+
 #include <parsecpp/core/context.h>
 #include <parsecpp/core/parsingError.h>
 
@@ -54,3 +58,5 @@ private:
 };
 
 }
+
+#endif

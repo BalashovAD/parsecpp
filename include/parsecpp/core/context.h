@@ -1,5 +1,9 @@
 #pragma once
 
+// Needs for the correct single_include generation
+#ifndef PARSECPP_CONGEXT_H_GUARD
+#define PARSECPP_CONGEXT_H_GUARD
+
 #include <concepts>
 
 #include <cstddef>
@@ -306,3 +310,5 @@ decltype(auto) get(Ctx& ctx) noexcept {
 
 
 }
+
+#endif

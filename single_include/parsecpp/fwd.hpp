@@ -3,8 +3,16 @@
 // #include <parsecpp/core/forward.h>
 
 
+// Needs for the correct single_include generation
+#ifndef PARSECPP_FORWARD_H_GUARD
+#define PARSECPP_FORWARD_H_GUARD
+
 // #include <parsecpp/core/context.h>
 
+
+// Needs for the correct single_include generation
+#ifndef PARSECPP_CONGEXT_H_GUARD
+#define PARSECPP_CONGEXT_H_GUARD
 
 #include <concepts>
 
@@ -313,6 +321,8 @@ decltype(auto) get(Ctx& ctx) noexcept {
 
 }
 
+#endif
+
 // #include <parsecpp/core/parsingError.h>
 
 
@@ -398,3 +408,5 @@ private:
 };
 
 }
+
+#endif
