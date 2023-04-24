@@ -25,4 +25,23 @@ using GetParserResult = typename std::decay_t<Parser>::Type;
 template <ParserType Parser>
 using GetParserCtx = typename std::decay_t<Parser>::Ctx;
 
+template<typename, typename = std::void_t<>>
+struct HasTypeCtx : std::false_type { };
+
+template<typename T>
+struct HasTypeCtx<T, std::void_t<std::enable_if_t<IsCtx<typename T::Ctx>, void>>> : std::true_type {};
+
+template <typename Modifier>
+struct ContextTrait {
+    struct Dummy {
+        using Ctx = VoidContext;
+    };
+    using Ctx = typename std::conditional_t<HasTypeCtx<Modifier>::value,
+            Modifier,
+            Dummy>::Ctx;
+};
+
+template <typename T>
+using GetContextTrait = typename ContextTrait<T>::Ctx;
+
 }

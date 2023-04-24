@@ -37,7 +37,11 @@ auto liftRecCtx(Fn const& fn, Stream& stream, Ctx& ctx, TupleParser const& parse
     constexpr size_t Ind = sizeof...(values);
     if constexpr (std::tuple_size_v<TupleParser> == Ind) {
         using ReturnType = std::invoke_result_t<Fn, Values...>;
-        return Parser<ReturnType>::data(std::invoke(fn, values...));
+        if constexpr (std::is_invocable_v<Fn, Values...>) {
+            return Parser<ReturnType>::data(std::invoke(fn, values...));
+        } else {
+            return Parser<ReturnType>::data(std::invoke(fn, values..., ctx));
+        }
     } else {
         return std::get<Ind>(parsers).apply(stream, ctx).flatMap([&](auto &&a) {
             return liftRecCtx(
@@ -49,7 +53,7 @@ auto liftRecCtx(Fn const& fn, Stream& stream, Ctx& ctx, TupleParser const& parse
 }
 
 template <typename Fn, ParserType ...Args>
-    requires(IsVoidCtx<GetParserCtx<Args>> && ...)
+    requires(IsVoidCtx<GetContextTrait<Fn>> && (IsVoidCtx<GetParserCtx<Args>> && ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
     return make_parser([fn, parsers = std::make_tuple(args...)](Stream& s) {
         return details::liftRec(fn, s, parsers);
@@ -58,9 +62,9 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 
 
 template <typename Fn, ParserType ...Args>
-    requires(!IsVoidCtx<GetParserCtx<Args>> || ...)
+    requires(!IsVoidCtx<GetContextTrait<Fn>> || (!IsVoidCtx<GetParserCtx<Args>> || ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
-    using Ctx = UnionCtx<GetParserCtx<Args>...>;
+    using Ctx = UnionCtx<GetContextTrait<Fn>, GetParserCtx<Args>...>;
     return make_parser<Ctx>([fn, parsers = std::make_tuple(args...)](Stream& s, auto& ctx) {
         return details::liftRecCtx(fn, s, ctx, parsers);
     });

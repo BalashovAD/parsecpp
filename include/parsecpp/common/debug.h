@@ -123,6 +123,8 @@ inline auto logPoint(std::string const& name) noexcept {
 template <bool onlyError>
 struct ParserWork {
 public:
+    using Ctx = DebugContext;
+
     explicit ParserWork(std::string parserName) noexcept
         : m_parserName(std::move(parserName)) {
 
@@ -149,6 +151,8 @@ private:
 
 
 struct AddStackLevel {
+    using Ctx = DebugContext;
+
     auto operator()(auto& parser, Stream& stream, debug::DebugContext& ctx) const noexcept {
         ctx.get().changeLevel(+1);
         Finally revert([&]() {
@@ -160,6 +164,8 @@ struct AddStackLevel {
 
 
 struct SaveParsedSource {
+    using Ctx = DebugContext;
+
     std::string desc;
 
     auto operator()(auto& parser, Stream& stream, debug::DebugContext& ctx) const noexcept {
@@ -170,25 +176,6 @@ struct SaveParsedSource {
             return t;
         });
     }
-};
-
-}
-
-namespace prs {
-
-template<>
-struct ModifierTrait<debug::AddStackLevel> {
-    using Ctx = debug::DebugContext;
-};
-
-template<>
-struct ModifierTrait<debug::SaveParsedSource> {
-    using Ctx = debug::DebugContext;
-};
-
-template <bool b>
-struct ModifierTrait<debug::ParserWork<b>> {
-    using Ctx = debug::DebugContext;
 };
 
 }

@@ -68,12 +68,6 @@ private:
 };
 
 
-template <typename Modifier>
-struct ModifierTrait {
-    using Ctx = VoidContext;
-};
-
-
 template <ParserType ParserA, typename Modify>
     requires(ParserA::nocontext && std::is_invocable_v<Modify, ModifyCallerI<GetParserResult<ParserA>>&, Stream&>)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
@@ -116,9 +110,9 @@ auto operator*(ParserA parserA, ModifyWithContext<Modify, Ctx> modifier) noexcep
 }
 
 template <ParserType ParserA, typename Modify>
-    requires (!IsVoidCtx<typename ModifierTrait<Modify>::Ctx> && ParserA::nocontext)
+    requires (!IsVoidCtx<typename ContextTrait<Modify>::Ctx> && ParserA::nocontext)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
-    using Ctx = typename ModifierTrait<Modify>::Ctx;
+    using Ctx = typename ContextTrait<Modify>::Ctx;
     using UCtx = UnionCtx<GetParserCtx<ParserA>, Ctx>;
     return make_parser<UCtx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {

@@ -76,7 +76,7 @@ auto letters() noexcept {
 
 class FromRange {
 public:
-    FromRange(char begin, char end) noexcept
+    constexpr FromRange(char begin, char end) noexcept
         : m_begin(begin)
         , m_end(end) {
 

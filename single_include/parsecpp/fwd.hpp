@@ -11,8 +11,8 @@
 
 
 // Needs for the correct single_include generation
-#ifndef PARSECPP_CONGEXT_H_GUARD
-#define PARSECPP_CONGEXT_H_GUARD
+#ifndef PARSECPP_CONTEXT_H_GUARD
+#define PARSECPP_CONTEXT_H_GUARD
 
 #include <concepts>
 
