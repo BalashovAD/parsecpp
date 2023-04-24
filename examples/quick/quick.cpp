@@ -57,14 +57,33 @@ Parser<char> makeB() {
     return (charFrom('B') | lazy(makeA)).toCommonType();
 }
 
+static constexpr auto parserA = charFrom('A');
+static constexpr auto parserB = charFrom('B');
+
+Parser<char> makeRecursive() noexcept {
+    return (parserB | (parserA >> lazy(makeRecursive))).toCommonType();
+}
+
+
 void recursion() {
-    auto parser = makeA();
-    Stream example("AAAAB");
-    parser(example).join([](char c) {
-        std::cout << "Lazy parsed" << std::endl;
-    }, [&example](auto const& error) {
-        std::cout << "Error: " << example.generateErrorText(error) << std::endl;
-    });
+    {
+        auto parser = makeRecursive();
+        Stream example("AAAAB");
+        parser(example).join([](char c) {
+            std::cout << "Lazy parsed" << std::endl;
+        }, [&example](auto const& error) {
+            std::cout << "Error: " << example.generateErrorText(error) << std::endl;
+        });
+    }
+    {
+        auto parser = makeA();
+        Stream example("AAAAB");
+        parser(example).join([](char c) {
+            std::cout << "Lazy one fn parsed" << std::endl;
+        }, [&example](auto const& error) {
+            std::cout << "Error: " << example.generateErrorText(error) << std::endl;
+        });
+    }
 }
 
 void contextSimple() {
@@ -108,6 +127,31 @@ void filter() {
     });
 }
 
+template <typename T, typename Allocator>
+struct MakeWithAllocator {
+    using Ctx = ContextWrapper<Allocator&>;
+
+    template <typename ...Args>
+    auto operator()(Args &&...args, Ctx& ctx) const {
+        return ctx.get().template alloc<T>(std::forward<Args>(args)...);
+    }
+};
+
+struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
+    void add(Container& sum, std::tuple<double, double> priceAndQty) const noexcept {
+        sum += get<0>(priceAndQty) * get<1>(priceAndQty);
+    }
+};
+
+void countSum() noexcept {
+    auto parser = (concat(charFrom('(') >> number(), charFrom(';') >> number() << charFrom(')')) * CountSumRepeat{}).endOfStream();
+    Stream example("(1.5;3)(2;1)(0;3)");
+    parser(example).join([](double sum) {
+        std::cout << "Count sum: " << sum << std::endl;
+    }, [&example](auto const& error) {
+        std::cout << "Error: " << example.generateErrorText(error) << std::endl;
+    });
+}
 
 
 int main() {
@@ -117,6 +161,7 @@ int main() {
     recursion();
     contextSimple();
     filter();
+    countSum();
 
     return 0;
 }

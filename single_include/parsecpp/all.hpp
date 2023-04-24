@@ -11,8 +11,8 @@
 
 
 // Needs for the correct single_include generation
-#ifndef PARSECPP_CONGEXT_H_GUARD
-#define PARSECPP_CONGEXT_H_GUARD
+#ifndef PARSECPP_CONTEXT_H_GUARD
+#define PARSECPP_CONTEXT_H_GUARD
 
 #include <concepts>
 
@@ -955,6 +955,25 @@ using GetParserResult = typename std::decay_t<Parser>::Type;
 template <ParserType Parser>
 using GetParserCtx = typename std::decay_t<Parser>::Ctx;
 
+template<typename, typename = std::void_t<>>
+struct HasTypeCtx : std::false_type { };
+
+template<typename T>
+struct HasTypeCtx<T, std::void_t<std::enable_if_t<IsCtx<typename T::Ctx>, void>>> : std::true_type {};
+
+template <typename Modifier>
+struct ContextTrait {
+    struct Dummy {
+        using Ctx = VoidContext;
+    };
+    using Ctx = typename std::conditional_t<HasTypeCtx<Modifier>::value,
+            Modifier,
+            Dummy>::Ctx;
+};
+
+template <typename T>
+using GetContextTrait = typename ContextTrait<T>::Ctx;
+
 }
 // #include <parsecpp/core/context.h>
 
@@ -1892,7 +1911,11 @@ auto liftRecCtx(Fn const& fn, Stream& stream, Ctx& ctx, TupleParser const& parse
     constexpr size_t Ind = sizeof...(values);
     if constexpr (std::tuple_size_v<TupleParser> == Ind) {
         using ReturnType = std::invoke_result_t<Fn, Values...>;
-        return Parser<ReturnType>::data(std::invoke(fn, values...));
+        if constexpr (std::is_invocable_v<Fn, Values...>) {
+            return Parser<ReturnType>::data(std::invoke(fn, values...));
+        } else {
+            return Parser<ReturnType>::data(std::invoke(fn, values..., ctx));
+        }
     } else {
         return std::get<Ind>(parsers).apply(stream, ctx).flatMap([&](auto &&a) {
             return liftRecCtx(
@@ -1904,7 +1927,7 @@ auto liftRecCtx(Fn const& fn, Stream& stream, Ctx& ctx, TupleParser const& parse
 }
 
 template <typename Fn, ParserType ...Args>
-    requires(IsVoidCtx<GetParserCtx<Args>> && ...)
+    requires(IsVoidCtx<GetContextTrait<Fn>> && (IsVoidCtx<GetParserCtx<Args>> && ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
     return make_parser([fn, parsers = std::make_tuple(args...)](Stream& s) {
         return details::liftRec(fn, s, parsers);
@@ -1913,9 +1936,9 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 
 
 template <typename Fn, ParserType ...Args>
-    requires(!IsVoidCtx<GetParserCtx<Args>> || ...)
+    requires(!IsVoidCtx<GetContextTrait<Fn>> || (!IsVoidCtx<GetParserCtx<Args>> || ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
-    using Ctx = UnionCtx<GetParserCtx<Args>...>;
+    using Ctx = UnionCtx<GetContextTrait<Fn>, GetParserCtx<Args>...>;
     return make_parser<Ctx>([fn, parsers = std::make_tuple(args...)](Stream& s, auto& ctx) {
         return details::liftRecCtx(fn, s, ctx, parsers);
     });
@@ -2010,12 +2033,6 @@ private:
 };
 
 
-template <typename Modifier>
-struct ModifierTrait {
-    using Ctx = VoidContext;
-};
-
-
 template <ParserType ParserA, typename Modify>
     requires(ParserA::nocontext && std::is_invocable_v<Modify, ModifyCallerI<GetParserResult<ParserA>>&, Stream&>)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
@@ -2058,9 +2075,9 @@ auto operator*(ParserA parserA, ModifyWithContext<Modify, Ctx> modifier) noexcep
 }
 
 template <ParserType ParserA, typename Modify>
-    requires (!IsVoidCtx<typename ModifierTrait<Modify>::Ctx> && ParserA::nocontext)
+    requires (!IsVoidCtx<typename ContextTrait<Modify>::Ctx> && ParserA::nocontext)
 auto operator*(ParserA parserA, Modify modifier) noexcept {
-    using Ctx = typename ModifierTrait<Modify>::Ctx;
+    using Ctx = typename ContextTrait<Modify>::Ctx;
     using UCtx = UnionCtx<GetParserCtx<ParserA>, Ctx>;
     return make_parser<UCtx>(
             [parser = std::move(parserA), mod = std::move(modifier)](Stream& stream, auto& ctx) {
@@ -2211,34 +2228,6 @@ auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexc
 
 // #include <parsecpp/core/parser.h>
 
-
-#include <charconv>
-
-
-namespace prs {
-
-
-/**
- * @return Parser<Number>
- */
-template <typename Number = double>
-    requires (std::is_arithmetic_v<Number>)
-auto number() noexcept {
-    return Parser<Number>::make([](Stream& s) {
-        auto sv = s.sv();
-        Number n{};
-        if (auto res = std::from_chars(sv.data(), sv.data() + sv.size(), n);
-                res.ec == std::errc{}) {
-            s.moveUnsafe(res.ptr - sv.data());
-            return Parser<Number>::data(n);
-        } else {
-            // TODO: get error and pos from res
-            return Parser<Number>::makeError("Cannot parse number", s.pos());
-        }
-    });
-}
-
-}
 // #include <parsecpp/common/string.h>
 
 
@@ -2320,7 +2309,7 @@ auto letters() noexcept {
 
 class FromRange {
 public:
-    FromRange(char begin, char end) noexcept
+    constexpr FromRange(char begin, char end) noexcept
         : m_begin(begin)
         , m_end(end) {
 
@@ -2481,6 +2470,45 @@ auto literal(std::string str) noexcept {
 
 
 }
+
+#include <charconv>
+
+
+namespace prs {
+
+
+/**
+ * @return Parser<Number>
+ */
+template <typename Number = double>
+    requires (std::is_arithmetic_v<Number>)
+auto number() noexcept {
+    return Parser<Number>::make([](Stream& s) {
+        auto sv = s.sv();
+        Number n{};
+        if (auto res = std::from_chars(sv.data(), sv.data() + sv.size(), n);
+                res.ec == std::errc{}) {
+            s.moveUnsafe(res.ptr - sv.data());
+            return Parser<Number>::data(n);
+        } else {
+            // TODO: get error and pos from res
+            return Parser<Number>::makeError("Cannot parse number", s.pos());
+        }
+    });
+}
+
+
+/**
+ *
+ * @return Parser<char>
+ */
+constexpr auto digit() noexcept {
+    return charFrom(FromRange('0', '9'));
+}
+
+}
+// #include <parsecpp/common/string.h>
+
 // #include <parsecpp/common/process.h>
 
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <parsecpp/core/parser.h>
+#include <parsecpp/common/string.h>
 
 #include <charconv>
 
@@ -26,6 +27,15 @@ auto number() noexcept {
             return Parser<Number>::makeError("Cannot parse number", s.pos());
         }
     });
+}
+
+
+/**
+ *
+ * @return Parser<char>
+ */
+constexpr auto digit() noexcept {
+    return charFrom(FromRange('0', '9'));
 }
 
 }
