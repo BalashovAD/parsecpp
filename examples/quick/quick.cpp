@@ -139,7 +139,7 @@ struct MakeWithAllocator {
 
 struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
     void add(Container& sum, std::tuple<double, double> priceAndQty) const noexcept {
-        sum += get<0>(priceAndQty) * get<1>(priceAndQty);
+        sum += std::get<0>(priceAndQty) * std::get<1>(priceAndQty);
     }
 };
 
