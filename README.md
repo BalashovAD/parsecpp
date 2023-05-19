@@ -5,12 +5,12 @@
 Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf).
 
 ## TODO List
-- [x] Add quick examples to readme
 - [x] Disable error log by flag
-- [x] Add Drop control class for performance optimizations
 - [x] Add call stack for debug purpose
 - [x] Add custom context for parsing
-- [ ] Add guide how to write the fastest parsers
+- [ ] Support LL(k) grammatical rules
+- [ ] Non ascii symbols
+- [ ] Lookahead operators
 
 ## Examples
 
