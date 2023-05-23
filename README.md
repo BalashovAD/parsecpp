@@ -11,6 +11,7 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 - [ ] Support LL(k) grammatical rules
 - [ ] Non ascii symbols
 - [ ] Lookahead operators
+- [ ] SIMD
 
 ## Examples
 
@@ -101,7 +102,7 @@ parser(example);
 #### LazyCached
 
 Make one instance of recursive parser in preparing time. It's a much faster way to make recursive parsers. 
-But result parser (`Parser'<T>`) must have no mutable states inside, 
+But result parser (`Parser'<T>`) must have no mutable states inside, captured non-unique variables, 
 and allow to be called recursively for one instance. 
 Also, because `LazyCached` type dependence on `Fn` that dependence on `Parser<T>`,
 the generator cannot use `decltype(auto)` for return type. So, usually, the generator should use `toCommonType` for type erasing.
@@ -116,20 +117,21 @@ This code is slightly faster when `lazyCached`, but code looks harder to read an
 
 
 #### Tag in lazy*
-The `Tag` type must be unique for any difference call of `lazyCached`, `lazyForget` function. 
-For cases where you call `lazyCached` only once per line, you can use the default parameter `AutoTag`. 
-If you are unsure, specialize `Tag` type manually. Be careful with func helpers that cover the auto tag parameter.
+The `Tag` type must be unique for any difference captured parser of `lazyCached`, `lazyForget` function. 
+For cases where you call `lazyCached` only once per line, you can use the default tag `AutoTag`. 
+Use macros `AutoTagT` for unique type, `AutoTagV` for tag instance.  
+If you are unsure, specialize `Tag` type manually. Be careful with func helpers that cover the tag parameter.
 For example the following code won't work correctly:
 ```c++
 // Doesn't work properly
 template <typename Fn>
 auto f(Fn f) {
 // use AutoTag with current line, but this code isn't unique for difference f with the same class Fn
-    return lazyCached(f) << spaces(); 
+    return lazyCached<AutoTagT>(f) << spaces(); 
 }
 
 // Correct version
-template <typename Tag = AutoTag<>, typename Fn>
+template <typename Tag, typename Fn>
 auto f(Fn f) {
 // use AutoTag line of call f
     return lazyCached<Tag>(f) << spaces();
@@ -139,7 +141,7 @@ auto f(Fn f) {
 ```c++
 // Fn ~ std::function<Parser'<T>(void)>
 
-template <typename Tag = AutoTag<>, std::invocable Fn>
+template <typename Tag, std::invocable Fn>
 auto lazyCached(Fn const&) noexcept(Fn);
 ```
 
@@ -152,14 +154,14 @@ Parser<Unit> bracesLazy() noexcept {
 }
 
 Parser<Unit> bracesCache() noexcept {
-    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache) >> charFrom(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache, AutoTagM) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat() >> success()).toCommonType();
 }
-
-auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
+using ForgetTag = AutoTagT;
+auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit, ForgetTag>>>() >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat() >> success())) {
 
-    return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyForget<Unit, ForgetTag>(bracesForget) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat() >> success());
 }
 ```

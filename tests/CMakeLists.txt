@@ -12,7 +12,7 @@ set(TEST_LIBRARIES gtest gtest_main)
 
 file(GLOB_RECURSE TEST_SOURCE_LIST ./*.cpp)
 
-add_executable(unit-tests ${TEST_SOURCE_LIST} ${HEADER_LIST})
+add_executable(unit-tests ${TEST_SOURCE_LIST} ${HEADER_LIST} common/numberTest.cpp)
 
 target_link_libraries(unit-tests PRIVATE ${TEST_LIBRARIES})
 

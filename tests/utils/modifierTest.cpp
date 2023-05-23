@@ -20,7 +20,7 @@ TEST(Modifier, Common) {
 
 TEST(Modifier, LeftCtx) {
     ContextWrapper<HitCounterType<>> ctx{0};
-    auto parser = spaces() >> (hitCounter() >> number()) * AddStringDesc{};
+    auto parser = charFrom(' ').repeat() >> (hitCounter() >> number()) * AddStringDesc{};
 
     success_parsing(parser, {1.2, "1.2"}, " 1.2y", "y", ctx);
     success_parsing(parser, {-1.2, "-1.2"}, "  -1.2y", "y", ctx);

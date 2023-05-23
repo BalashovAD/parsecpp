@@ -23,10 +23,10 @@ TEST(Pimple, Parser) {
 }
 
 TEST(Pimple, JustPimpl) {
-    Pimpl<double, debug::DebugContext> t((number() << debug::logPoint("a")).toCommonType());
+    Pimpl<unsigned, debug::DebugContext> t((number<unsigned>() << debug::logPoint("a")).toCommonType());
     Stream s{"1"};
     debug::DebugContext ctx;
     auto result = t(s, ctx);
-    EXPECT_FALSE(result.isError());
+    ASSERT_FALSE(result.isError());
     EXPECT_EQ(result.data(), 1.f);
 }

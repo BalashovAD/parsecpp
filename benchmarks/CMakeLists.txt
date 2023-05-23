@@ -20,8 +20,14 @@ target_include_directories(benchmarks PRIVATE
 
 target_link_libraries(benchmarks ${BENCHMARK_LIBRARIES})
 
-add_custom_command(
-        TARGET benchmarks POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_CURRENT_SOURCE_DIR}/data/*
-        ${CMAKE_CURRENT_BINARY_DIR}/)
+set(BENCHMARK_DATA_FILES 100k.json binance.json canada.json colors.css)
+
+# -E copy src/* dest doesn't work in windows
+foreach(file_i ${BENCHMARK_DATA_FILES})
+    add_custom_command(
+            TARGET benchmarks POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/${file_i}
+            ${CMAKE_CURRENT_BINARY_DIR}/)
+endforeach(file_i)
+

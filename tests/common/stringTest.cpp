@@ -39,6 +39,15 @@ TEST(String, lettersFrom) {
     success_parsing(parser, "test", "test test", " test");
 }
 
+TEST(String, skipChars) {
+    auto parser = skipChars(FromRange('a', 'z'), 'A', 'B', 'C');
+
+    success_parsing(parser, {}, "test", "");
+    success_parsing(parser, {}, "tZtest", "Ztest");
+    success_parsing(parser, {}, "Ztest", "Ztest");
+    success_parsing(parser, {}, "", "");
+}
+
 TEST(String, until) {
     auto parser = until(FromRange('a', 'z'), 'A', 'B', 'C');
 
@@ -158,4 +167,47 @@ TEST(String, searchAlwaysPossessive) {
     failed_parsing(parser, 0, "abababc");
     failed_parsing(parser, 0, "abc");
     failed_parsing(parser, 0, "bc");
+}
+
+TEST(String, escapedString) {
+    auto parser = charFrom('"') >> escapedString<'"', '\\'>();
+
+    success_parsing(parser, "test", R"("test")");
+    success_parsing(parser, R"(te"st)", R"("te\"st")");
+    success_parsing(parser, R"(te\"st)", R"("te\\\"st")");
+    success_parsing(parser, R"(te\)", R"("te\\"st")", R"(st")");
+
+    failed_parsing(parser, 1, R"("test)");
+    failed_parsing(parser, 1, R"("test\")");
+    failed_parsing(parser, 1, R"("test\\\")");
+    failed_parsing(parser, 1, R"(")");
+}
+
+TEST(String, escapedStringSame) {
+    auto parser = charFrom('"') >> escapedString<'"', '"'>();
+
+    success_parsing(parser, "test", R"("test")");
+    success_parsing(parser, R"(te"st)", R"("te""st")");
+    success_parsing(parser, R"(te""st)", R"("te""""st")");
+    success_parsing(parser, R"(te")", R"("te"""st")", R"(st")");
+    success_parsing(parser, R"(Super, "luxurious" truck)", R"("Super, ""luxurious"" truck")", R"()");
+
+    failed_parsing(parser, 1, R"("test)");
+    failed_parsing(parser, 1, R"("test"")");
+    failed_parsing(parser, 1, R"("test"""")");
+    failed_parsing(parser, 1, R"(")");
+}
+
+TEST(String, escapedStringCSV) {
+    auto quoted = skipChars(' ', '\t') >> charFrom('"') >> escapedString<'"', '"'>() << skipChars(' ', '\t');
+    // parser std::vector<std::vector<std::string>>
+    auto parser = (quoted | until<std::string>(',', '\n')).repeat(charFrom(',')).repeat(charFrom('\n'));
+
+    std::string_view csv = R"(1996,Ford,E350,"Super, ""luxurious"" truck"
+1997, "Ford" , E350
+"1997", Ford ,E350)";
+    success_parsing(parser, {
+        {"1996", "Ford", "E350", R"(Super, "luxurious" truck)"},
+        {"1997", "Ford", " E350"},
+        {"1997", " Ford ", "E350"}}, csv);
 }
