@@ -2,6 +2,8 @@
 
 #include <parsecpp/core/parser.h>
 
+#include <source_location>
+
 namespace prs {
 
 template <std::invocable Fn>
@@ -46,16 +48,27 @@ private:
 };
 
 
-template <auto = details::SourceLocation::current().hash()>
-struct AutoTag;
+template <auto tHash>
+struct AutoTag {
+    static constexpr auto value = tHash;
+};
 
-template <typename Tag = AutoTag<>, std::invocable Fn>
+#define AutoTagT AutoTag<details::SourceLocation::current().hash()>
+#define AutoTagV AutoTagT{}
+
+
+template <typename Tag, std::invocable Fn>
 auto lazyCached(Fn const& genParser) noexcept(std::is_nothrow_invocable_v<Fn>) {
     return make_parser(LazyCached<Tag, Fn>{genParser});
 }
 
+template <typename Tag, std::invocable Fn>
+auto lazyCached(Fn const& genParser, Tag tag) noexcept(std::is_nothrow_invocable_v<Fn>) {
+    return make_parser(LazyCached<Tag, Fn>{genParser});
+}
 
-template <typename T, typename tag = AutoTag<>>
+
+template <typename T, typename tag>
 class LazyForget {
     using InvokerType = typename Parser<T>::Result (*)(void*, Stream&);
 
@@ -67,7 +80,7 @@ class LazyForget {
     }
 public:
     template <typename Fn>
-        requires(!std::is_same_v<Fn, LazyForget<T>>)
+        requires(!std::is_same_v<Fn, LazyForget<T, tag>>)
     explicit LazyForget(Fn const& fn) noexcept(std::is_nothrow_invocable_v<Fn>) {
         if (pInvoke == nullptr) {
             using ParserOut = std::invoke_result_t<Fn>;
@@ -86,7 +99,7 @@ private:
 };
 
 
-template <typename T, typename Ctx, typename tag = AutoTag<>>
+template <typename T, typename Ctx, typename tag>
         requires (!IsVoidCtx<Ctx>)
 class LazyForgetCtx {
     using InvokerType = typename Parser<T, Ctx>::Result (*)(void*, Stream&, Ctx&);
@@ -99,7 +112,7 @@ class LazyForgetCtx {
     }
 public:
     template <typename Fn>
-        requires(!std::is_same_v<Fn, LazyForget<T>>)
+        requires(!std::is_same_v<Fn, LazyForgetCtx<T, Ctx, tag>>)
     explicit LazyForgetCtx(Fn const& fn) noexcept(std::is_nothrow_invocable_v<Fn>) {
         if (pInvoke == nullptr) {
             using ParserOut = std::invoke_result_t<Fn>;
@@ -118,13 +131,13 @@ private:
 };
 
 
-template <typename T, typename Fn, typename Tag = AutoTag<>>
-auto lazyForget(Fn const& f) noexcept {
+template <typename T, typename Tag, typename Fn>
+auto lazyForget(Fn const& f, Tag = {}) noexcept {
     return Parser<T>::make(LazyForget<T, Tag>{f});
 }
 
-template <typename T, typename Ctx, typename Fn, typename Tag = AutoTag<>>
-auto lazyForgetCtx(Fn const& f) noexcept {
+template <typename T, typename Ctx, typename Fn, typename Tag>
+auto lazyForgetCtx(Fn const& f, Tag = {}) noexcept {
     return Parser<T>::make(LazyForgetCtx<T, Ctx, Tag>{f});
 }
 

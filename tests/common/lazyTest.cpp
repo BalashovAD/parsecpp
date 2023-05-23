@@ -45,7 +45,7 @@ TEST(Lazy, Braces) {
 }
 
 Parser<Unit> bracesCached() noexcept {
-    return (concat(charFrom('(', '{', '['), lazyCached(bracesCached).maybe() >> charFrom(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCached, AutoTagV).maybe() >> charFrom(')', '}', ']'))
         .cond([](std::tuple<char, char> const& cc) {
             return details::cmpAnyOf(cc
                      , std::make_tuple('(', ')')
@@ -89,7 +89,7 @@ auto makeACached() {
 
 
 Parser<char> makeBCached() {
-    return (charFrom('B') | lazyCached(makeACached)).toCommonType();
+    return (charFrom('B') | lazyCached<AutoTagT>(makeACached)).toCommonType();
 }
 
 
@@ -103,9 +103,9 @@ TEST(LazyCached, AB) {
     failed_parsing(parser, 4, "AAAAC");
 }
 
-
-auto f() noexcept -> decltype((charFrom('a') >> std::declval<Parser<Unit, VoidContext, LazyForget<Unit>>>() >> charFrom('b')).maybe() >> success()) {
-    return (charFrom('a') >> lazyForget<Unit>(f) >> charFrom('b')).maybe() >> success();
+using TagForForget = AutoTagT;
+auto f() noexcept -> decltype((charFrom('a') >> std::declval<Parser<Unit, VoidContext, LazyForget<Unit, TagForForget>>>() >> charFrom('b')).maybe() >> success()) {
+    return (charFrom('a') >> lazyForget<Unit, TagForForget>(f) >> charFrom('b')).maybe() >> success();
 }
 
 TEST(LazyForget, rec) {
@@ -117,4 +117,49 @@ TEST(LazyForget, rec) {
     failed_parsing(parser, 2, "abab");
     failed_parsing(parser, 0, "aaabb");
     failed_parsing(parser, 6, "aaabbbb");
+}
+
+
+Parser<char> parserWithAutoTag() {
+    return (charFrom('a') << lazyCached(parserWithAutoTag, AutoTagV).maybe()).toCommonType();
+}
+
+Parser<char> parserWithAutoTag2() {
+    return (charFrom('b') << lazyCached(parserWithAutoTag2, AutoTagV).maybe()).toCommonType();
+}
+
+TEST(AutoTag, Test) {
+    constexpr auto hash1 = AutoTagT::value;
+    constexpr auto hash2 = AutoTagT::value;
+
+    static_assert(hash1 != hash2);
+}
+
+TEST(LazyCached, AutoTag) {
+    auto parserA = parserWithAutoTag();
+    auto parserB = parserWithAutoTag2();
+
+    success_parsing(parserA, 'a', "aaa");
+    success_parsing(parserB, 'b', "baa", "aa");
+}
+
+
+struct NonUniqueTag;
+Parser<char> parserWithOneTag() {
+    return (charFrom('a') << lazyCached<NonUniqueTag>(parserWithOneTag).maybe()).toCommonType();
+}
+
+Parser<char> parserWithOneTag2() {
+    return (charFrom('b') << lazyCached<NonUniqueTag>(parserWithOneTag).maybe()).toCommonType();
+}
+
+TEST(LazyCached, NonUniqueTag) {
+    auto parserA = parserWithOneTag();
+    auto parserB = parserWithOneTag2();
+
+    success_parsing(parserA, 'a', "aaa");
+    success_parsing(parserB, 'b', "baa", "");
+    success_parsing(parserB, 'b', "bbb", "bb");
+
+    failed_parsing(parserB, 0, "aaa");
 }

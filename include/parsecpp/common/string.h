@@ -111,6 +111,18 @@ auto lettersFrom(Args ...args) noexcept {
     });
 }
 
+template <LeftCmpWith<char> ...Args>
+auto skipChars(Args ...args) noexcept {
+    static_assert(sizeof...(args) > 0);
+    return make_parser([args...](Stream& str) {
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        return Parser<Drop>::data({});
+    });
+}
+
 
 template <bool forwardSearch = false>
 auto searchText(std::string const& searchPattern) noexcept {
@@ -223,6 +235,7 @@ auto between(char border, Parser parser) noexcept {
     return between(border, border, std::move(parser));
 }
 
+
 template <typename StringType = std::string_view>
 auto literal(std::string str) noexcept {
     return Parser<StringType>::make([str](Stream& s) {
@@ -235,5 +248,64 @@ auto literal(std::string str) noexcept {
     });
 }
 
+
+template <char endSymbol, char escapingSymbol = '\\'>
+auto escapedString() noexcept {
+    if constexpr (endSymbol != escapingSymbol) {
+        return Parser<std::string>::make([](Stream& s) {
+            bool isEscaped = false;
+            const auto sv = s.sv();
+            std::string out;
+            for (size_t i = 0; i != sv.size(); ++i) {
+                switch (sv[i]) {
+                    case escapingSymbol: {
+                        if (std::exchange(isEscaped, !isEscaped)) {
+                            out.push_back(escapingSymbol);
+                        }
+                        break;
+                    }
+                    case endSymbol: {
+                        if (isEscaped) {
+                            isEscaped = false;
+                            out.push_back(endSymbol);
+                        } else {
+                            s.moveUnsafe(i + 1);
+                            return Parser<std::string>::data(std::move(out));
+                        }
+                        break;
+                    }
+                    default: out.push_back(sv[i]);
+                }
+            }
+
+            return Parser<std::string>::makeError("Cannot find end symbol", s.pos());
+        });
+    } else {
+        return Parser<std::string>::make([](Stream& s) {
+            bool isEscaped = false;
+            const auto sv = s.sv();
+            std::string out;
+            for (size_t i = 0; i != sv.size(); ++i) {
+                if (sv[i] == endSymbol) {
+                    if (isEscaped) {
+                        isEscaped = false;
+                        out.push_back(endSymbol);
+                    } else {
+                        if (i + 1 != sv.size() && sv[i + 1] == endSymbol) {
+                            isEscaped = true;
+                        } else {
+                            s.moveUnsafe(i + 1);
+                            return Parser<std::string>::data(std::move(out));
+                        }
+                    }
+                } else {
+                    out.push_back(sv[i]);
+                }
+            }
+
+            return Parser<std::string>::makeError("Cannot find end symbol", s.pos());
+        });
+    }
+}
 
 }

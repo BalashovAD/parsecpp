@@ -21,20 +21,21 @@ Parser<Unit> bracesLazy() noexcept {
 
 
 Parser<Unit> bracesCache() noexcept {
-    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache) >> charFrom(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache, AutoTagV) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success()).toCommonType();
 }
 
 
 Parser<Drop> bracesCacheDrop() noexcept {
-    return (concat(charFrom('(', '{', '['), lazyCached(bracesCacheDrop) >> charFrom(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCacheDrop, AutoTagV) >> charFrom(')', '}', ']'))
         .cond(checkBraces).drop().repeat<>()).toCommonType();
 }
 
-auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit>>>() >> charFrom(')', '}', ']'))
+using ForgetTag = AutoTagT;
+auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit, ForgetTag>>>() >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success())) {
 
-    return (concat(charFrom('(', '{', '['), lazyForget<Unit>(bracesForget) >> charFrom(')', '}', ']'))
+    return (concat(charFrom('(', '{', '['), lazyForget<Unit, ForgetTag>(bracesForget) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<5>() >> success());
 }
 
