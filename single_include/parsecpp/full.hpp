@@ -383,7 +383,7 @@ public:
     Pimpl() = delete;
 
     template <typename ParserType>
-    Pimpl(ParserType t) noexcept;
+    explicit Pimpl(ParserType t) noexcept;
 
     ~Pimpl();
 
@@ -399,7 +399,7 @@ public:
     Pimpl() = delete;
 
     template <typename ParserType>
-    Pimpl(ParserType t) noexcept;
+    explicit Pimpl(ParserType t) noexcept;
 
     ~Pimpl();
 
@@ -945,8 +945,8 @@ constexpr inline bool IsParserC<Parser<T, Ctx, Fn>> = true;
 
 }
 
-template <typename T>
-concept ParserType = details::IsParserC<std::decay_t<T>>;
+template <typename Parser>
+concept ParserType = details::IsParserC<std::decay_t<Parser>>;
 
 
 template <ParserType Parser>
@@ -956,6 +956,14 @@ using GetParserResult = typename std::decay_t<Parser>::Type;
 template <ParserType Parser>
 using GetParserCtx = typename std::decay_t<Parser>::Ctx;
 
+
+template <typename T, typename Parser>
+concept ParserTypeResult = std::is_same_v<GetParserResult<Parser>, T>;
+
+template <typename T, typename Ctx, typename Parser>
+concept ParserTypeSpec = std::is_same_v<GetParserResult<Parser>, T> && std::is_same_v<GetParserCtx<Parser>, Ctx>;
+
+
 template<typename, typename = std::void_t<>>
 struct HasTypeCtx : std::false_type { };
 
@@ -964,9 +972,11 @@ struct HasTypeCtx<T, std::void_t<std::enable_if_t<IsCtx<typename T::Ctx>, void>>
 
 template <typename Modifier>
 struct ContextTrait {
+private:
     struct Dummy {
         using Ctx = VoidContext;
     };
+public:
     using Ctx = typename std::conditional_t<HasTypeCtx<Modifier>::value,
             Modifier,
             Dummy>::Ctx;
@@ -1678,6 +1688,8 @@ Expected<T, details::ParsingError> Pimpl<T, VoidContext>::operator()(Stream& s) 
 // #include <parsecpp/core/parser.h>
 
 
+#include <source_location>
+
 namespace prs {
 
 template <std::invocable Fn>
@@ -1722,16 +1734,27 @@ private:
 };
 
 
-template <auto = details::SourceLocation::current().hash()>
-struct AutoTag;
+template <auto tHash>
+struct AutoTag {
+    static constexpr auto value = tHash;
+};
 
-template <typename Tag = AutoTag<>, std::invocable Fn>
+#define AutoTagT AutoTag<details::SourceLocation::current().hash()>
+#define AutoTagV AutoTagT{}
+
+
+template <typename Tag, std::invocable Fn>
 auto lazyCached(Fn const& genParser) noexcept(std::is_nothrow_invocable_v<Fn>) {
     return make_parser(LazyCached<Tag, Fn>{genParser});
 }
 
+template <typename Tag, std::invocable Fn>
+auto lazyCached(Fn const& genParser, Tag tag) noexcept(std::is_nothrow_invocable_v<Fn>) {
+    return make_parser(LazyCached<Tag, Fn>{genParser});
+}
 
-template <typename T, typename tag = AutoTag<>>
+
+template <typename T, typename tag>
 class LazyForget {
     using InvokerType = typename Parser<T>::Result (*)(void*, Stream&);
 
@@ -1743,7 +1766,7 @@ class LazyForget {
     }
 public:
     template <typename Fn>
-        requires(!std::is_same_v<Fn, LazyForget<T>>)
+        requires(!std::is_same_v<Fn, LazyForget<T, tag>>)
     explicit LazyForget(Fn const& fn) noexcept(std::is_nothrow_invocable_v<Fn>) {
         if (pInvoke == nullptr) {
             using ParserOut = std::invoke_result_t<Fn>;
@@ -1762,7 +1785,7 @@ private:
 };
 
 
-template <typename T, typename Ctx, typename tag = AutoTag<>>
+template <typename T, typename Ctx, typename tag>
         requires (!IsVoidCtx<Ctx>)
 class LazyForgetCtx {
     using InvokerType = typename Parser<T, Ctx>::Result (*)(void*, Stream&, Ctx&);
@@ -1775,7 +1798,7 @@ class LazyForgetCtx {
     }
 public:
     template <typename Fn>
-        requires(!std::is_same_v<Fn, LazyForget<T>>)
+        requires(!std::is_same_v<Fn, LazyForgetCtx<T, Ctx, tag>>)
     explicit LazyForgetCtx(Fn const& fn) noexcept(std::is_nothrow_invocable_v<Fn>) {
         if (pInvoke == nullptr) {
             using ParserOut = std::invoke_result_t<Fn>;
@@ -1794,13 +1817,13 @@ private:
 };
 
 
-template <typename T, typename Fn, typename Tag = AutoTag<>>
-auto lazyForget(Fn const& f) noexcept {
+template <typename T, typename Tag, typename Fn>
+auto lazyForget(Fn const& f, Tag = {}) noexcept {
     return Parser<T>::make(LazyForget<T, Tag>{f});
 }
 
-template <typename T, typename Ctx, typename Fn, typename Tag = AutoTag<>>
-auto lazyForgetCtx(Fn const& f) noexcept {
+template <typename T, typename Ctx, typename Fn, typename Tag>
+auto lazyForgetCtx(Fn const& f, Tag = {}) noexcept {
     return Parser<T>::make(LazyForgetCtx<T, Ctx, Tag>{f});
 }
 
@@ -2345,6 +2368,18 @@ auto lettersFrom(Args ...args) noexcept {
     });
 }
 
+template <LeftCmpWith<char> ...Args>
+auto skipChars(Args ...args) noexcept {
+    static_assert(sizeof...(args) > 0);
+    return make_parser([args...](Stream& str) {
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        return Parser<Drop>::data({});
+    });
+}
+
 
 template <bool forwardSearch = false>
 auto searchText(std::string const& searchPattern) noexcept {
@@ -2457,6 +2492,7 @@ auto between(char border, Parser parser) noexcept {
     return between(border, border, std::move(parser));
 }
 
+
 template <typename StringType = std::string_view>
 auto literal(std::string str) noexcept {
     return Parser<StringType>::make([str](Stream& s) {
@@ -2470,6 +2506,65 @@ auto literal(std::string str) noexcept {
 }
 
 
+template <char endSymbol, char escapingSymbol = '\\'>
+auto escapedString() noexcept {
+    if constexpr (endSymbol != escapingSymbol) {
+        return Parser<std::string>::make([](Stream& s) {
+            bool isEscaped = false;
+            const auto sv = s.sv();
+            std::string out;
+            for (size_t i = 0; i != sv.size(); ++i) {
+                switch (sv[i]) {
+                    case escapingSymbol: {
+                        if (std::exchange(isEscaped, !isEscaped)) {
+                            out.push_back(escapingSymbol);
+                        }
+                        break;
+                    }
+                    case endSymbol: {
+                        if (isEscaped) {
+                            isEscaped = false;
+                            out.push_back(endSymbol);
+                        } else {
+                            s.moveUnsafe(i + 1);
+                            return Parser<std::string>::data(std::move(out));
+                        }
+                        break;
+                    }
+                    default: out.push_back(sv[i]);
+                }
+            }
+
+            return Parser<std::string>::makeError("Cannot find end symbol", s.pos());
+        });
+    } else {
+        return Parser<std::string>::make([](Stream& s) {
+            bool isEscaped = false;
+            const auto sv = s.sv();
+            std::string out;
+            for (size_t i = 0; i != sv.size(); ++i) {
+                if (sv[i] == endSymbol) {
+                    if (isEscaped) {
+                        isEscaped = false;
+                        out.push_back(endSymbol);
+                    } else {
+                        if (i + 1 != sv.size() && sv[i + 1] == endSymbol) {
+                            isEscaped = true;
+                        } else {
+                            s.moveUnsafe(i + 1);
+                            return Parser<std::string>::data(std::move(out));
+                        }
+                    }
+                } else {
+                    out.push_back(sv[i]);
+                }
+            }
+
+            return Parser<std::string>::makeError("Cannot find end symbol", s.pos());
+        });
+    }
+}
+
 }
 
 #include <charconv>
@@ -2477,6 +2572,15 @@ auto literal(std::string str) noexcept {
 
 namespace prs {
 
+namespace {
+
+template <typename Number, typename = std::void_t<>>
+constexpr bool hasFromCharsMethod = false;
+
+template <typename Number>
+constexpr bool hasFromCharsMethod<Number, std::void_t<decltype(std::from_chars(nullptr, nullptr, std::declval<Number&>()))>> = true;
+
+}
 
 /**
  * @return Parser<Number>
@@ -2487,13 +2591,34 @@ auto number() noexcept {
     return Parser<Number>::make([](Stream& s) {
         auto sv = s.sv();
         Number n{};
-        if (auto res = std::from_chars(sv.data(), sv.data() + sv.size(), n);
-                res.ec == std::errc{}) {
-            s.moveUnsafe(res.ptr - sv.data());
-            return Parser<Number>::data(n);
+        if constexpr (hasFromCharsMethod<Number>) {
+            if (auto res = std::from_chars(sv.data(), sv.data() + sv.size(), n);
+                    res.ec == std::errc{}) {
+                s.moveUnsafe(res.ptr - sv.data());
+                return Parser<Number>::data(n);
+            } else {
+                // TODO: get error and pos from res
+                return Parser<Number>::makeError("Cannot parse number", s.pos());
+            }
         } else {
-            // TODO: get error and pos from res
-            return Parser<Number>::makeError("Cannot parse number", s.pos());
+            if constexpr (std::is_same_v<Number, double>) {
+                char *end = const_cast<char*>(sv.end());
+                n = std::strtod(sv.data(), &end);
+                size_t endIndex = end - sv.data();
+                if (endIndex == 0) {
+                    return Parser<Number>::makeError("Cannot parse number", s.pos());
+                }
+                if (errno == ERANGE) {
+                    return Parser<Number>::makeError("Cannot parse number ERANGE", s.pos());
+                }
+                s.moveUnsafe(endIndex);
+                return Parser<Number>::data(n);
+            } else if (std::is_same_v<Number, float>) {
+
+            } else {
+                static_assert(!std::is_void_v<Number>, "Number type doesn't support");
+                return Parser<Number>::makeError("Not supported", s.pos());
+            }
         }
     });
 }

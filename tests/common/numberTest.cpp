@@ -37,7 +37,7 @@ TEST(Base, ParseDouble) {
 
     success_parsing(parser, 4.1, "4.1 ", " ");
     success_parsing(parser, .1, "0.1a", "a");
-    success_parsing(parser, 4., "+4");
+    success_parsing(parser, -4., "-4");
 
 
     {
