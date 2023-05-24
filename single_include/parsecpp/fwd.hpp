@@ -382,7 +382,7 @@ public:
     Pimpl() = delete;
 
     template <typename ParserType>
-    Pimpl(ParserType t) noexcept;
+    explicit Pimpl(ParserType t) noexcept;
 
     ~Pimpl();
 
@@ -398,7 +398,7 @@ public:
     Pimpl() = delete;
 
     template <typename ParserType>
-    Pimpl(ParserType t) noexcept;
+    explicit Pimpl(ParserType t) noexcept;
 
     ~Pimpl();
 
