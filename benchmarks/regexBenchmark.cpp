@@ -28,9 +28,11 @@ void BM_SearchSuccess(benchmark::State& state, P parser, std::string const& file
         Stream s{test};
         auto result = parser(s);
         if (result.isError()) {
-            throw std::runtime_error("Cannot parse: " + s.generateErrorText(result.error()));
+            state.SkipWithError("Cannot parse");
         }
     }
+
+    state.SetBytesProcessed(test.size() * state.iterations());
 }
 
 
@@ -111,6 +113,7 @@ void BM_RegexHexColor(benchmark::State& state) {
             s.remove_prefix(match.position() + match.length());
         }
     }
+    state.SetBytesProcessed(test.size() * state.iterations());
 }
 
 BENCHMARK(BM_RegexHexColor);

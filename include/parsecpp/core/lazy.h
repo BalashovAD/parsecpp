@@ -89,7 +89,6 @@ public:
         }
     }
 
-
     auto operator()(Stream& stream) const {
         return pInvoke(pParser, stream);
     }
@@ -121,7 +120,6 @@ public:
         }
     }
 
-
     auto operator()(Stream& stream, Ctx& ctx) const {
         return pInvoke(pParser, stream, ctx);
     }
@@ -139,6 +137,79 @@ auto lazyForget(Fn const& f, Tag = {}) noexcept {
 template <typename T, typename Ctx, typename Fn, typename Tag>
 auto lazyForgetCtx(Fn const& f, Tag = {}) noexcept {
     return Parser<T>::make(LazyForgetCtx<T, Ctx, Tag>{f});
+}
+
+
+struct LazyBindingTag{};
+template <typename T, ContextType ParserCtx, typename Tag = LazyBindingTag>
+class LazyCtxBinding {
+public:
+    struct LazyContext;
+
+    static constexpr bool nocontext = false;
+    using Ctx = UnionCtx<ParserCtx, ContextWrapper<LazyContext const&>>;
+
+    using P = Parser<T, Ctx>;
+    using ParserResult = T;
+
+    struct LazyContext {
+        explicit LazyContext(P const*const p) : parser(p) {};
+        P const*const parser;
+    };
+
+    explicit LazyCtxBinding() noexcept = default;
+
+    template <ContextType Context>
+    auto operator()(Stream& stream, Context& ctx) const {
+        auto const*const parser = get<LazyContext>(ctx).parser;
+        return parser->apply(stream, ctx);
+    }
+};
+
+template <typename Fn, typename Tag>
+auto lazyCtxBindingFn(Fn const& f [[maybe_unused]], Tag = {}) noexcept {
+    using P = std::invoke_result_t<Fn>;
+    using T = GetParserResult<P>;
+    using Ctx = GetParserCtx<P>;
+    using LZ = LazyCtxBinding<T, Ctx, Tag>;
+    return Parser<T, typename LZ::Ctx>::make(LZ{});
+}
+
+
+template <typename Tag, typename Fn>
+auto lazyCtxBindingFn(Fn const& f [[maybe_unused]]) noexcept {
+    return lazyCtxBinding(f, Tag{});
+}
+
+
+template <typename T, typename Tag = LazyBindingTag>
+auto lazyCtxBinding() noexcept {
+    using LZ = LazyCtxBinding<T, VoidContext, Tag>;
+    return Parser<T, typename LZ::Ctx>::make(LZ{});
+}
+
+
+template <typename T, typename Tag>
+auto lazyCtxBinding(Tag) noexcept {
+    return lazyCtxBinding<T, Tag>();
+}
+
+template <typename T, typename Ctx, typename Tag = LazyBindingTag>
+auto lazyCtxBindingCtx() noexcept {
+    using LZ = LazyCtxBinding<T, Ctx, Tag>;
+    return Parser<T, typename LZ::Ctx>::make(LZ{});
+}
+
+template <typename T, typename Ctx, typename Tag>
+auto lazyCtxBindingCtx(Tag = Tag{}) noexcept {
+    return lazyCtxBindingCtx<T, Ctx, Tag>();
+}
+
+template <typename T, ContextType Ctx, typename Tag = LazyBindingTag>
+requires (sizeCtx<Ctx> == 1)
+auto makeBindingCtx(Parser<T, Ctx> const& parser) noexcept {
+    using LazyCtx = typename LazyCtxBinding<T, VoidContext, Tag>::LazyContext;
+    return LazyCtx{std::addressof(parser)};
 }
 
 }

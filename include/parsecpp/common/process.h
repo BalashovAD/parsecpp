@@ -83,7 +83,7 @@ class Repeat {
 public:
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream, Ctx& ctx) noexcept {
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) {
         using P = Parser<typename std::decay_t<decltype(parser)>::Type, Ctx>;
 
         get().init();
@@ -107,12 +107,6 @@ private:
     Derived& get() noexcept {
         return static_cast<Derived&>(*this);
     }
-
-//
-//    template<class T>
-//    void add(T t, Ctx& ctx) {
-//        if constexpr ()
-//    }
 };
 
 
@@ -123,14 +117,13 @@ public:
 
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream) const noexcept {
+    auto operator()(auto& parser, Stream& stream) const {
         using P = Parser<Container>;
 
         decltype(auto) container = get().init();
         size_t iteration = 0;
-        auto backup = stream.pos();
         do {
-            backup = stream.pos();
+            auto backup = stream.pos();
             auto result = parser();
             if (!result.isError()) {
                 get().add(container, std::move(result).data());
@@ -177,6 +170,49 @@ private:
 template <typename Fn>
 auto processRepeat(Fn fn) {
     return ProcessRepeat<std::decay_t<Fn>>{fn};
+}
+
+template <ParserType P>
+struct ConvertResult {
+public:
+    using Ctx = GetParserCtx<P>;
+
+    explicit ConvertResult(P parser) noexcept
+        : m_parser(std::move(parser)) {
+
+    }
+
+    auto operator()(auto& parser, Stream& stream) const requires (IsVoidCtx<Ctx>) {
+        using ParserResult = typename std::decay_t<decltype(parser)>::Type;
+        static_assert(std::is_constructible_v<Stream, ParserResult>);
+        return parser().flatMap([&](auto &&t) {
+            Stream localStream{t};
+            return m_parser(localStream).flatMapError([&](details::ParsingError const& error) {
+                auto posOfError = stream.pos() - (localStream.full().size() - error.pos);
+                return P::PRS_MAKE_ERROR("Internal parser fail: " + error.description, posOfError);
+            });
+        });
+    }
+
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) const {
+        using ParserResult = typename std::decay_t<decltype(parser)>::Type;
+        static_assert(std::is_constructible_v<Stream, ParserResult>);
+        return parser().flatMap([&](auto &&t) {
+            Stream localStream{t};
+            return m_parser(localStream, ctx).flatMapError([&](details::ParsingError const& error) {
+                auto posOfError = stream.pos() - (localStream.full().size() - error.pos);
+                return Parser<ParserResult>::PRS_MAKE_ERROR("Internal parser fail: " + error.description, posOfError);
+            });
+        });
+    }
+private:
+    P m_parser;
+};
+
+
+template <ParserType P>
+auto convertResult(P parser) noexcept {
+    return ConvertResult{parser};
 }
 
 }

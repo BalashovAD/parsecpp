@@ -140,69 +140,42 @@ PJ parseArray() noexcept {
           << parserPost).toCommonType();
 }
 
-static void BM_json100k(benchmark::State& state) {
+static void BM_jsonFile(benchmark::State& state, std::string filename) {
     auto parser = parseAny();
-    std::ifstream file{"./100k.json"};
+    std::ifstream file{filename};
     if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file");
+        state.SkipWithError("Cannot open file");
+        return;
     }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-
     for (auto _ : state) {
         Stream s(json);
         auto data = parser(s);
         if (data.isError()) {
-            throw std::runtime_error("Cannot parse json");
+            state.SkipWithError("Cannot parse json");
         }
         benchmark::DoNotOptimize(data.data());
     }
+
+    state.SetBytesProcessed(json.size() * state.iterations());
 }
 
-BENCHMARK(BM_json100k);
+BENCHMARK_CAPTURE(BM_jsonFile, 100k, "100k.json");
+BENCHMARK_CAPTURE(BM_jsonFile, canada, "canada.json");
+BENCHMARK_CAPTURE(BM_jsonFile, binance, "binance.json");
 
+#ifdef ENABLE_HARD_BENCHMARK
 
-static void BM_citmCatalog(benchmark::State& state) {
-    auto parser = parseAny();
-    std::ifstream file{"./canada.json"};
-    if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file");
-    }
-    std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+BENCHMARK_CAPTURE(BM_jsonFile, 64kb, "64kb.json");
+BENCHMARK_CAPTURE(BM_jsonFile, 64kb_min, "64kb-min.json");
 
-    for (auto _ : state) {
-        Stream s(json);
-        auto data = parser(s);
-        if (data.isError()) {
-            std::cout << "Error: " << s.generateErrorText<10, 5>(data.error()) << std::endl;
-            throw std::runtime_error("Cannot parse json");
-        }
-        benchmark::DoNotOptimize(data.data());
-    }
-}
+BENCHMARK_CAPTURE(BM_jsonFile, 256kb, "256kb.json");
+BENCHMARK_CAPTURE(BM_jsonFile, 256kb_min, "256kb-min.json");
 
+BENCHMARK_CAPTURE(BM_jsonFile, 5mb, "5mb.json");
+BENCHMARK_CAPTURE(BM_jsonFile, 5mb_min, "5mb-min.json");
 
-BENCHMARK(BM_citmCatalog);
-
-static void BM_jsonBinance(benchmark::State& state) {
-    auto parser = parseAny();
-    std::ifstream file{"./binance.json"};
-    if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file");
-    }
-    std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-
-    for (auto _ : state) {
-        Stream s(json);
-        auto data = parser(s);
-        if (data.isError()) {
-            throw std::runtime_error("Cannot parse json");
-        }
-        benchmark::DoNotOptimize(data.data());
-    }
-}
-
-
-BENCHMARK(BM_jsonBinance);
+#endif
 
 
 auto jsonValueDouble(std::string fieldName) noexcept {
@@ -213,27 +186,31 @@ auto jsonValueUnsigned(std::string fieldName) noexcept {
     return searchText("\"" + fieldName + "\":") >> number<size_t>();
 }
 
+struct BinanceTrade {
+    size_t id;
+    double price;
+    double qty;
+    size_t time;
+    bool isBuyerMaker;
+};
 
-static void BM_jsonSpecializedBinance(benchmark::State& state) {
-    struct BinanceTrade {
-        size_t id;
-        double price;
-        double qty;
-        size_t time;
-        bool isBuyerMaker;
-    };
-
-    auto parser = charFrom('[') >> (charFrom('{') >> liftM(details::MakeClass<BinanceTrade>{},
+auto binanceParser() {
+    return charFrom('[') >> (charFrom('{') >> liftM(details::MakeClass<BinanceTrade>{},
             jsonValueUnsigned("id"),
             jsonValueDouble("price"),
             jsonValueDouble("qty"),
             jsonValueUnsigned("time"),
             searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
     ) << searchText("}") << charFrom(',').maybe()).repeat<1000>() << charFrom(']');
+}
+
+template <typename Parser>
+static void BM_jsonSpecializedBinance(benchmark::State& state, Parser parser) {
 
     std::ifstream file{"./binance.json"};
     if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file");
+        state.SkipWithError("Cannot open file");
+        return;
     }
     std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 
@@ -242,56 +219,17 @@ static void BM_jsonSpecializedBinance(benchmark::State& state) {
         auto data = parser(s);
         if (data.isError()) {
             std::cout << s.generateErrorText(data.error()) << std::endl;
-            throw std::runtime_error("Cannot parse json");
+            state.SkipWithError("Cannot parse json");
         } else {
             if (data.data().size() != 1000) {
-                throw std::runtime_error("Not full parsed: " + std::to_string(data.data().size()));
+                state.SkipWithError("Not full parsed");
             }
         }
         benchmark::DoNotOptimize(data.data());
     }
+
+    state.SetBytesProcessed(json.size() * state.iterations());
 }
 
-BENCHMARK(BM_jsonSpecializedBinance);
-
-
-static void BM_jsonSpecializedBinanceTypeErasing(benchmark::State& state) {
-    struct BinanceTrade {
-        size_t id;
-        double price;
-        double qty;
-        size_t time;
-        bool isBuyerMaker;
-    };
-
-    auto parser = (charFrom('[') >> (charFrom('{') >> liftM(details::MakeClass<BinanceTrade>{},
-            jsonValueUnsigned("id"),
-            jsonValueDouble("price"),
-            jsonValueDouble("qty"),
-            jsonValueUnsigned("time"),
-            searchText("\"isBuyerMaker\":") >> (literal("true") >> pure(true) | pure(false))
-    ) << searchText("}") << charFrom(',').maybe()).repeat<1000>() << charFrom(']')).toCommonType();
-
-    std::ifstream file{"./binance.json"};
-    if (!file.is_open()) {
-        throw std::runtime_error("Cannot open file");
-    }
-    std::string json{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-
-    for (auto _ : state) {
-        Stream s(json);
-        auto data = parser(s);
-        if (data.isError()) {
-            std::cout << s.generateErrorText(data.error()) << std::endl;
-            throw std::runtime_error("Cannot parse json");
-        } else {
-            if (data.data().size() != 1000) {
-                throw std::runtime_error("Not full parsed: " + std::to_string(data.data().size()));
-            }
-        }
-        benchmark::DoNotOptimize(data.data());
-    }
-}
-
-
-BENCHMARK(BM_jsonSpecializedBinanceTypeErasing);
+BENCHMARK_CAPTURE(BM_jsonSpecializedBinance, Common, binanceParser());
+BENCHMARK_CAPTURE(BM_jsonSpecializedBinance, TypeErasing, binanceParser().toCommonType());

@@ -93,7 +93,7 @@ Parser<char> makeBCached() {
 }
 
 
-TEST(LazyCached, AB) {
+TEST(LazyCtx, AAAAB) {
     auto parser = makeACached();
     success_parsing(parser, 'B', "ABABA", "ABA");
     success_parsing(parser, 'B', "AAAAAB", "");
@@ -101,6 +101,24 @@ TEST(LazyCached, AB) {
 
     failed_parsing(parser, 0, "BBBA");
     failed_parsing(parser, 4, "AAAAC");
+}
+
+struct CtxBindingTag;
+auto makeACtx() {
+    return (charFrom('A') >> (charFrom('B') | lazyCtxBinding<char, CtxBindingTag>())).toCommonType();
+}
+
+
+TEST(LazyCtxBinding, AAAAB) {
+    auto parser = makeACtx();
+    auto lazyBindingStorage = LazyCtxBinding<char, VoidContext, CtxBindingTag>::LazyContext{&parser};
+    auto ctx = parser.makeCtx(lazyBindingStorage);
+    success_parsing(parser, 'B', "ABABA", "ABA", ctx);
+    success_parsing(parser, 'B', "AAAAAB", "", ctx);
+    success_parsing(parser, 'B', "ABBBB", "BBB", ctx);
+
+    failed_parsing(parser, 0, "BBBA", ctx);
+    failed_parsing(parser, 4, "AAAAC", ctx);
 }
 
 using TagForForget = AutoTagT;

@@ -21,6 +21,8 @@ static void BM_ErrorHandling(benchmark::State& state) {
             std::cout << "Error parsed" << std::endl;
         }
     }
+
+    state.SetBytesProcessed(ERROR_A_LOT_OF_TIMES.size() * state.iterations());
 }
 
 BENCHMARK(BM_ErrorHandling);
