@@ -1069,7 +1069,7 @@ public:
 
     }
 
-    constexpr Result operator()(Stream& stream) const noexcept(nothrow) {
+    constexpr Result operator()(Stream& stream) const noexcept(nothrow) requires(nocontext) {
         if constexpr (!std::is_invocable_v<StoredFn, Stream&> && nocontext) {
             return std::invoke(m_fn, stream, VOID_CONTEXT);
         } else {
@@ -1087,7 +1087,7 @@ public:
     }
 
 
-    constexpr Result apply(Stream& stream) const noexcept(nothrow) {
+    constexpr Result apply(Stream& stream) const noexcept(nothrow) requires(nocontext) {
         return operator()(stream);
     }
 
@@ -1774,7 +1774,6 @@ public:
         }
     }
 
-
     auto operator()(Stream& stream) const {
         return pInvoke(pParser, stream);
     }
@@ -1806,7 +1805,6 @@ public:
         }
     }
 
-
     auto operator()(Stream& stream, Ctx& ctx) const {
         return pInvoke(pParser, stream, ctx);
     }
@@ -1824,6 +1822,79 @@ auto lazyForget(Fn const& f, Tag = {}) noexcept {
 template <typename T, typename Ctx, typename Fn, typename Tag>
 auto lazyForgetCtx(Fn const& f, Tag = {}) noexcept {
     return Parser<T>::make(LazyForgetCtx<T, Ctx, Tag>{f});
+}
+
+
+struct LazyBindingTag{};
+template <typename T, ContextType ParserCtx, typename Tag = LazyBindingTag>
+class LazyCtxBinding {
+public:
+    struct LazyContext;
+
+    static constexpr bool nocontext = false;
+    using Ctx = UnionCtx<ParserCtx, ContextWrapper<LazyContext const&>>;
+
+    using P = Parser<T, Ctx>;
+    using ParserResult = T;
+
+    struct LazyContext {
+        explicit LazyContext(P const*const p) : parser(p) {};
+        P const*const parser;
+    };
+
+    explicit LazyCtxBinding() noexcept = default;
+
+    template <ContextType Context>
+    auto operator()(Stream& stream, Context& ctx) const {
+        auto const*const parser = get<LazyContext>(ctx).parser;
+        return parser->apply(stream, ctx);
+    }
+};
+
+template <typename Fn, typename Tag>
+auto lazyCtxBindingFn(Fn const& f [[maybe_unused]], Tag = {}) noexcept {
+    using P = std::invoke_result_t<Fn>;
+    using T = GetParserResult<P>;
+    using Ctx = GetParserCtx<P>;
+    using LZ = LazyCtxBinding<T, Ctx, Tag>;
+    return Parser<T, typename LZ::Ctx>::make(LZ{});
+}
+
+
+template <typename Tag, typename Fn>
+auto lazyCtxBindingFn(Fn const& f [[maybe_unused]]) noexcept {
+    return lazyCtxBinding(f, Tag{});
+}
+
+
+template <typename T, typename Tag = LazyBindingTag>
+auto lazyCtxBinding() noexcept {
+    using LZ = LazyCtxBinding<T, VoidContext, Tag>;
+    return Parser<T, typename LZ::Ctx>::make(LZ{});
+}
+
+
+template <typename T, typename Tag>
+auto lazyCtxBinding(Tag) noexcept {
+    return lazyCtxBinding<T, Tag>();
+}
+
+template <typename T, typename Ctx, typename Tag = LazyBindingTag>
+auto lazyCtxBindingCtx() noexcept {
+    using LZ = LazyCtxBinding<T, Ctx, Tag>;
+    return Parser<T, typename LZ::Ctx>::make(LZ{});
+}
+
+template <typename T, typename Ctx, typename Tag>
+auto lazyCtxBindingCtx(Tag = Tag{}) noexcept {
+    return lazyCtxBindingCtx<T, Ctx, Tag>();
+}
+
+template <typename T, ContextType Ctx, typename Tag = LazyBindingTag>
+requires (sizeCtx<Ctx> == 1)
+auto makeBindingCtx(Parser<T, Ctx> const& parser) noexcept {
+    using LazyCtx = typename LazyCtxBinding<T, VoidContext, Tag>::LazyContext;
+    return LazyCtx{std::addressof(parser)};
 }
 
 }
@@ -2002,6 +2073,8 @@ public:
 template <ParserType Parser>
 class ModifyCaller : public ModifyCallerI<GetParserResult<Parser>> {
 public:
+    using Type = ModifyCallerI<GetParserResult<Parser>>::Type;
+
     ModifyCaller(Parser const& p, Stream& s) noexcept
         : m_parser(p)
         , m_stream(s) {}
@@ -2722,7 +2795,7 @@ class Repeat {
 public:
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream, Ctx& ctx) noexcept {
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) {
         using P = Parser<typename std::decay_t<decltype(parser)>::Type, Ctx>;
 
         get().init();
@@ -2746,12 +2819,6 @@ private:
     Derived& get() noexcept {
         return static_cast<Derived&>(*this);
     }
-
-//
-//    template<class T>
-//    void add(T t, Ctx& ctx) {
-//        if constexpr ()
-//    }
 };
 
 
@@ -2762,14 +2829,13 @@ public:
 
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream) const noexcept {
+    auto operator()(auto& parser, Stream& stream) const {
         using P = Parser<Container>;
 
         decltype(auto) container = get().init();
         size_t iteration = 0;
-        auto backup = stream.pos();
         do {
-            backup = stream.pos();
+            auto backup = stream.pos();
             auto result = parser();
             if (!result.isError()) {
                 get().add(container, std::move(result).data());
@@ -2816,6 +2882,49 @@ private:
 template <typename Fn>
 auto processRepeat(Fn fn) {
     return ProcessRepeat<std::decay_t<Fn>>{fn};
+}
+
+template <ParserType P>
+struct ConvertResult {
+public:
+    using Ctx = GetParserCtx<P>;
+
+    explicit ConvertResult(P parser) noexcept
+        : m_parser(std::move(parser)) {
+
+    }
+
+    auto operator()(auto& parser, Stream& stream) const requires (IsVoidCtx<Ctx>) {
+        using ParserResult = typename std::decay_t<decltype(parser)>::Type;
+        static_assert(std::is_constructible_v<Stream, ParserResult>);
+        return parser().flatMap([&](auto &&t) {
+            Stream localStream{t};
+            return m_parser(localStream).flatMapError([&](details::ParsingError const& error) {
+                auto posOfError = stream.pos() - (localStream.full().size() - error.pos);
+                return P::PRS_MAKE_ERROR("Internal parser fail: " + error.description, posOfError);
+            });
+        });
+    }
+
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) const {
+        using ParserResult = typename std::decay_t<decltype(parser)>::Type;
+        static_assert(std::is_constructible_v<Stream, ParserResult>);
+        return parser().flatMap([&](auto &&t) {
+            Stream localStream{t};
+            return m_parser(localStream, ctx).flatMapError([&](details::ParsingError const& error) {
+                auto posOfError = stream.pos() - (localStream.full().size() - error.pos);
+                return Parser<ParserResult>::PRS_MAKE_ERROR("Internal parser fail: " + error.description, posOfError);
+            });
+        });
+    }
+private:
+    P m_parser;
+};
+
+
+template <ParserType P>
+auto convertResult(P parser) noexcept {
+    return ConvertResult{parser};
 }
 
 }
