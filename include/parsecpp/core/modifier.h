@@ -14,6 +14,8 @@ public:
 template <ParserType Parser>
 class ModifyCaller : public ModifyCallerI<GetParserResult<Parser>> {
 public:
+    using Type = ModifyCallerI<GetParserResult<Parser>>::Type;
+
     ModifyCaller(Parser const& p, Stream& s) noexcept
         : m_parser(p)
         , m_stream(s) {}

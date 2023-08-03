@@ -37,6 +37,24 @@ public:
     using Op = NumberType(*)(NumberType, NumberType) noexcept;
     using ptr = std::shared_ptr<Expr>;
 
+    struct SubOp {
+        SubOp(Op op, NumberType value)
+            : m_pOp(op)
+            , m_spRhs(make(value)) {
+
+        }
+
+        SubOp(Op op, ptr spRhs)
+            : m_pOp(op)
+            , m_spRhs(std::move(spRhs)) {
+
+        }
+
+        using subptr = std::shared_ptr<SubOp>;
+        Op m_pOp = nullptr;
+        ptr m_spRhs;
+    };
+
     static constexpr auto opSelectorLow = details::makeFirstMatch((Expr::Op)nullptr,
             std::make_pair('+', &sum),
             std::make_pair('-', &minus));
@@ -105,12 +123,12 @@ private:
 struct MakeExpr {
     Expr::ptr operator()(
             Expr::ptr const& spLhs,
-            std::optional<std::tuple<Expr::Op, Expr::ptr>> const& maybeRhs) const noexcept {
-        if (!maybeRhs) {
-            return spLhs;
-        } else {
-            return Expr::make(spLhs, std::get<0>(*maybeRhs), std::get<1>(*maybeRhs));
+            std::vector<Expr::SubOp::subptr> const& maybeRhs) const noexcept {
+        auto result = spLhs;
+        for (auto const& sub : maybeRhs) {
+            result = Expr::make(result, sub->m_pOp, sub->m_spRhs);
         }
+        return result;
     }
 
     Expr::ptr operator()(double n) const noexcept {
@@ -146,22 +164,20 @@ Parser<Expr::ptr> makeF() noexcept {
 }
 
 
-Parser<std::optional<std::tuple<Expr::Op, Expr::ptr>>> makeT1() noexcept {
-    return concat(
+Parser<std::vector<Expr::SubOp::subptr>> makeT1() noexcept {
+    return liftM(details::MakeShared<Expr::SubOp>{},
             makeOp(Expr::opSelectorHigh),
-            liftM(MakeExpr{}, makeF(), lazy(makeT1))
-    ).maybe().toCommonType();
+            makeF()).repeat().toCommonType();
 }
 
 auto makeT() noexcept {
     return liftM(MakeExpr{}, makeF(), makeT1());
 }
 
-Parser<std::optional<std::tuple<Expr::Op, Expr::ptr>>> makeE1() noexcept {
-    return concat(
+Parser<std::vector<Expr::SubOp::subptr>> makeE1() noexcept {
+    return liftM(details::MakeShared<Expr::SubOp>{},
             makeOp(Expr::opSelectorLow),
-            liftM(MakeExpr{}, makeT(), lazy(makeE1))
-    ).maybe().toCommonType();
+            lazy(makeT)).repeat().toCommonType();
 }
 
 ParserExpr makeE() noexcept {

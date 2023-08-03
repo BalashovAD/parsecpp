@@ -48,7 +48,7 @@ public:
 
     }
 
-    constexpr Result operator()(Stream& stream) const noexcept(nothrow) {
+    constexpr Result operator()(Stream& stream) const noexcept(nothrow) requires(nocontext) {
         if constexpr (!std::is_invocable_v<StoredFn, Stream&> && nocontext) {
             return std::invoke(m_fn, stream, VOID_CONTEXT);
         } else {
@@ -66,7 +66,7 @@ public:
     }
 
 
-    constexpr Result apply(Stream& stream) const noexcept(nothrow) {
+    constexpr Result apply(Stream& stream) const noexcept(nothrow) requires(nocontext) {
         return operator()(stream);
     }
 

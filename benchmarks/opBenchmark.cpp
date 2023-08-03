@@ -16,6 +16,8 @@ static void BM_OpSimpleTest(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+
+    state.SetBytesProcessed(OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_OpSimpleTest);
@@ -53,6 +55,8 @@ static void BM_ETALON_OpSimpleTest(benchmark::State& state) {
 
         benchmark::DoNotOptimize(data.size());
     }
+
+    state.SetBytesProcessed(OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_ETALON_OpSimpleTest);
@@ -84,6 +88,8 @@ static void BM_OpSimpleTestRegex(benchmark::State& state) {
         }
         benchmark::DoNotOptimize(data.size());
     }
+
+    state.SetBytesProcessed(OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_OpSimpleTestRegex);
@@ -96,6 +102,8 @@ static void BM_EmptyOp(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+
+    state.SetBytesProcessed(EMPTY_OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_EmptyOp);
@@ -108,6 +116,8 @@ static void BM_EmptyOpFastSpaces(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+
+    state.SetBytesProcessed(EMPTY_OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_EmptyOpFastSpaces);
@@ -119,6 +129,8 @@ static void BM_EmptyOpSuccess(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+
+    state.SetBytesProcessed(EMPTY_OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_EmptyOpSuccess);
@@ -131,6 +143,8 @@ static void BM_ETALON_EmptyOp(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+
+    state.SetBytesProcessed(EMPTY_OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_ETALON_EmptyOp);
@@ -143,6 +157,7 @@ static void BM_TypeErasing(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+    state.SetBytesProcessed(TYPE_ERASING_OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_TypeErasing);
@@ -154,6 +169,7 @@ static void BM_ETALON_TypeErasing(benchmark::State& state) {
         auto data = parser(s);
         benchmark::DoNotOptimize(data.data().size());
     }
+    state.SetBytesProcessed(TYPE_ERASING_OP_TEST.size() * state.iterations());
 }
 
 BENCHMARK(BM_ETALON_TypeErasing);

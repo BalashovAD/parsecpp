@@ -27,11 +27,11 @@ static void BM_Context(benchmark::State& state, Parser const& parser, std::strin
 
         auto ans = parser.apply(s);
         if (ans.isError()) {
-            throw std::runtime_error("Cannot parse");
-        } else {
-
+            state.SkipWithError("Cannot parse");
         }
     }
+
+    state.SetBytesProcessed(challenge.size() * state.iterations());
 }
 
 

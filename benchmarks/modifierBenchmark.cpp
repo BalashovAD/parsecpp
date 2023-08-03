@@ -60,9 +60,11 @@ static void BM_Modifier(benchmark::State& state, Parser const& parser, std::stri
 
         auto ans = parser.apply(s);
         if (ans.isError()) {
-            throw std::runtime_error("Cannot parse");
+            state.SkipWithError("Cannot parse");
         }
     }
+
+    state.SetBytesProcessed(challenge.size() * state.iterations());
 }
 
 static inline std::string COMMON_CHALLENGE = details::repeatF<6>(std::string{"aba"}, [](auto s) {return s + s;});

@@ -157,7 +157,7 @@ TEST(Context, ContextLink) {
     char c;
     auto parser = addContext<1>() >> charFrom('1') * ModifyWithContext<SaveLastResult<char>, SaveLastResult<char>::Ctx>() << addContext();
     using P = decltype(parser);
-    auto ctx = P::makeCtx(0, 0, c);
+    auto ctx = parser.makeCtx(0, 0, c);
 
     static_assert(std::is_same_v<P::Ctx,
             ContextWrapper<
@@ -167,4 +167,28 @@ TEST(Context, ContextLink) {
 
     success_parsing(parser, '1', "123", "23", ctx);
     EXPECT_EQ(c, '1');
+    success_parsing(parser, '1', "123", "23", ctx);
+    EXPECT_EQ(c, '1');
+}
+
+
+TEST(Context, Pointer) {
+    struct SaveChar {
+        using Ctx = ContextWrapper<char*>;
+        auto operator()(ModifyCallerI<char>& parser, Stream& s, Ctx& ctx) const {
+            return parser().map([&ctx](char c) {
+                *get<char*>(ctx) = c;
+                return c;
+            });
+        }
+    };
+
+    char c;
+    auto parser = charFrom(FromRange('0', '9')) * ModifyWithContext<SaveChar, SaveChar::Ctx>{};
+    auto ctx = parser.makeCtx(&c);
+
+    success_parsing(parser, '1', "123", "23", ctx);
+    EXPECT_EQ(c, '1');
+    success_parsing(parser, '2', "23", "3", ctx);
+    EXPECT_EQ(c, '2');
 }

@@ -331,6 +331,54 @@ auto parser = charFrom('a', 'b', 'c').drop().repeat(); // Parser<Drop>
 // this code doesn't need to allocate memory for std::vector and works much faster
 ```
 
+### Modifier
+
+The helpful function to modify a parser execution is `Modifier`. It's an overloaded `operator*`, `operator*=` that wrap 
+parser to the next function. Have the same functionality as a native method of `Parser`.
+Example:
+```c++
+struct MustConsume {
+    template <typename T>
+    auto operator()(ModifyCallerI<T>& parser, Stream& s) const {
+        auto pos = s.pos();
+        return parser().flatMap([pos, &s](T &&t) {
+            if (s.pos() > pos) {
+                return Parser<T>::data(t);
+            } else {
+                return Parser<T>::makeError("Didn't consume stream", s.pos());
+            }
+        });
+    }
+};
+
+
+auto parser = spaces() * MustConsume{};
+
+Stream s{"test"};
+parser(s); // failed, needs to consume at least on symbol
+```
+
+Because `operator*` has more priority than all others operators that you use, the next code is equivalent:
+```c++
+a >> b * mod; // (a >> b) * mod
+a >> b *= mod; // a >> (b * mod)
+```
+Use `operator*=` as lower priority `operator*` with `modify` functionality.
+
+### Repeat
+The simplest way to customize `Parser::reapeat` functionality is using `Repeat` class.
+For example, if you don't need to store all values, but compute some function of it, you can use `processRepeat` function:
+```c++
+std::string s;
+auto parser = charFrom(FromRange('a', 'z')) * processRepeat([&](char c) {
+    s += toupper(c);
+});
+
+Stream stream{"zaqA"};
+parser(stream); // remaining "A";
+s == "ZAQ";
+```
+
 ### Debug
 For debug purpose use namespace `debug::`, see `parsecpp/common/debug.h` and `tests/common/debugTest.cpp`.
 

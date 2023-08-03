@@ -26,3 +26,22 @@ TEST(Process, ProcessRepeatMap) {
     success_parsing(parser, {{'a', 2}, {'q', 1}, {'z', 1}}, "zaaqA", "A");
     success_parsing(parser, {}, "1zaqA", "1zaqA");
 }
+
+TEST(Process, ConvertResult) {
+    auto parser = until('|') * convertResult(number());
+
+    success_parsing(parser, 124, "124|A", "|A");
+    success_parsing(parser, 12, "12p4|A", "|A"); // p4 won't be parsed at all
+
+    failed_parsing(parser, 0, "tt|tt");
+}
+
+
+TEST(Process, ConvertResultFull) {
+    auto parser = until('|') * convertResult(number().endOfStream());
+
+    success_parsing(parser, 124, "124|A", "|A");
+
+    failed_parsing(parser, 2, "12p4|A");
+    failed_parsing(parser, 0, "tt|tt");
+}
