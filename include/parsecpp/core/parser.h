@@ -151,7 +151,8 @@ public:
     template <typename ListFn>
         requires(nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
-        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream) {
+        using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream) {
            return lhs.apply(stream).map(fn);
         });
     }
@@ -164,7 +165,8 @@ public:
     template <std::invocable<T> ListFn>
         requires(!nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
-        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
+        using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
            return lhs.apply(stream, ctx).map(fn);
         });
     }
