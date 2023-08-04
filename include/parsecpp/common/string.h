@@ -3,6 +3,8 @@
 #include <parsecpp/core/parser.h>
 #include <parsecpp/core/lift.h>
 
+#include <parsecpp/utils/constexprString.hpp>
+
 namespace prs {
 
 /**
@@ -142,9 +144,34 @@ auto searchText(std::string const& searchPattern) noexcept {
     });
 }
 
+template <ConstexprString searchPattern, bool forwardSearch = false>
+auto searchText() noexcept {
+    return Parser<Unit>::make([](Stream& stream) {
+        auto &str = stream.sv();
+        if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
+            if constexpr (forwardSearch) {
+                stream.move(pos > 0 ? pos - 1 : 0);
+                return Parser<Unit>::data({});
+            } else {
+                str = str.substr(pos + searchPattern.size());
+                return Parser<Unit>::data({});
+            }
+        } else {
+            return Parser<Unit>::PRS_MAKE_ERROR("Cannot find '" + searchPattern.toString() + "'", stream.pos());
+        }
+    });
+}
+
 template <LeftCmpWith<char> ...Args>
 constexpr auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
+        return details::cmpAnyOf(c, chars...);
+    });
+}
+
+template <auto ...chars>
+constexpr auto charFrom() noexcept {
+    return satisfy([](char c) {
         return details::cmpAnyOf(c, chars...);
     });
 }
@@ -244,6 +271,19 @@ auto literal(std::string str) noexcept {
             return Parser<StringType>::data(StringType{str});
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
+        }
+    });
+}
+
+template <ConstexprString str>
+auto literal() noexcept {
+    using T = std::string_view;
+    return Parser<T>::make([](Stream& s) {
+        if (s.sv().starts_with(str)) {
+            s.move(str.size());
+            return Parser<T>::data(str);
+        } else {
+            return Parser<T>::makeError("Cannot find literal", s.pos());
         }
     });
 }

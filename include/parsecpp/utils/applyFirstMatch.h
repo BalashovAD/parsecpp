@@ -47,6 +47,11 @@ public:
         return foreach<0>(f, std::forward<Args>(args)...);
     }
 
+    template <typename KeyLike, typename ...Args>
+    constexpr decltype(auto) operator()(KeyLike const& key, Args &&...args) const {
+        return apply(key, std::forward<Args>(args)...);
+    }
+
     static constexpr size_t size() noexcept {
         return sizeof ...(TupleArgs);
     }

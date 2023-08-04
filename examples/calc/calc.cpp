@@ -141,9 +141,7 @@ using ParserExpr = Parser<Expr::ptr>;
 
 template <typename FirstMatch>
 auto makeOp(FirstMatch ops) noexcept {
-    return ((spaces() >> anyChar() << spaces()) >>= [ops](char c) {
-        return ops.apply(c);
-    }).cond([](Expr::Op pOp) {
+    return ((spaces() >> anyChar() << spaces()) >>= ops).cond([](Expr::Op pOp) {
         return pOp != nullptr;
     });
 }

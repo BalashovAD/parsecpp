@@ -109,11 +109,15 @@ the generator cannot use `decltype(auto)` for return type. So, usually, the gene
 
 #### LazyForget
 
-This is an improved version of `lazyCached` without slow type erasing.
+This is an alternate version of `lazyCached` without type erasing.
 `LazyForget` only depends on the parser result type and doesn't create a recursive type. 
 You need to specify return type manually with `decltype(X)`, where `X` is value in `return` with changed `lazyForget<R>(f)` to
 `std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
-This code is slightly faster when `lazyCached`, but code looks harder to read and edit. 
+This code may be slightly faster when `lazyCached`, but code looks harder to read and edit. 
+
+#### LazyCtxBinding
+
+This is an alternate version of `lazyCached` that using context variable to determinate recursion.
 
 
 #### Tag in lazy*
@@ -163,6 +167,18 @@ auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::d
 
     return (concat(charFrom('(', '{', '['), lazyForget<Unit, ForgetTag>(bracesForget) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat() >> success());
+}
+
+auto bracesCtx() noexcept {
+    return (concat(charFrom('(', '{', '['), lazyCtxBinding<Unit>() >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
+}
+
+void usingBracesCtx() {
+    auto parser = bracesCtx();
+    auto lazyBindingStorage = makeBindingCtx(baseParser);
+    auto ctx = parser.makeCtx(lazyBindingStorage);
+    parser(stream, ctx);
 }
 ```
 
@@ -298,7 +314,7 @@ This parser requires that the entire stream be consumed for Success.
 ```c++
 auto parser = charFrom('A', 'B').endOfStream(); // Parser<char>
 // "B" -> B
-// "AB" -> error {Remaining str "B"}
+// "AB" -> error {Remaining m_str "B"}
 ```
 
 ### Drop

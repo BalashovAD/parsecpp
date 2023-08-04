@@ -113,7 +113,7 @@ public:
     auto map(OnSuccess onSuccess) const&
                     noexcept(map_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::decay_t<std::invoke_result_t<OnSuccess, const T&>>;
         return isError() ? Expected<Result, Error>{m_error} : Expected<Result, Error>{onSuccess(m_data)};
     }
 
@@ -122,7 +122,7 @@ public:
     auto map(OnSuccess onSuccess) &&
                     noexcept(map_move_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, T&&>;
+        using Result = std::decay_t<std::invoke_result_t<OnSuccess, T&&>>;
         return isError() ? Expected<Result, Error>{std::move(m_error)}
                 : Expected<Result, Error>{onSuccess(std::move(m_data))};
     }
