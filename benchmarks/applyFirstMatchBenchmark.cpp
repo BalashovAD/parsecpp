@@ -2,7 +2,7 @@
 
 #include <parsecpp/full.hpp>
 
-auto generateChallenge(size_t maxN) noexcept {
+inline auto generateChallenge(size_t maxN) noexcept {
     constexpr auto testSize = 1000;
     std::array<unsigned, testSize> out{};
 

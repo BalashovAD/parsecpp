@@ -13,7 +13,7 @@ static inline std::array<std::string, sampleSize> samples = {
         "algo-advance",
 };
 
-auto generateChallenge(size_t maxN) noexcept {
+inline auto generateChallengeSamples(size_t maxN) noexcept {
     std::vector<std::string_view> out{}; out.reserve(maxN);
 
     for (size_t i = 0; i != maxN; ++i) {
