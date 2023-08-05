@@ -609,7 +609,7 @@ public:
     auto map(OnSuccess onSuccess) const&
                     noexcept(map_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, const T&>;
+        using Result = std::decay_t<std::invoke_result_t<OnSuccess, const T&>>;
         return isError() ? Expected<Result, Error>{m_error} : Expected<Result, Error>{onSuccess(m_data)};
     }
 
@@ -618,7 +618,7 @@ public:
     auto map(OnSuccess onSuccess) &&
                     noexcept(map_move_nothrow<OnSuccess>) {
 
-        using Result = std::invoke_result_t<OnSuccess, T&&>;
+        using Result = std::decay_t<std::invoke_result_t<OnSuccess, T&&>>;
         return isError() ? Expected<Result, Error>{std::move(m_error)}
                 : Expected<Result, Error>{onSuccess(std::move(m_data))};
     }
@@ -1173,7 +1173,8 @@ public:
     template <typename ListFn>
         requires(nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
-        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream) {
+        using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream) {
            return lhs.apply(stream).map(fn);
         });
     }
@@ -1186,7 +1187,8 @@ public:
     template <std::invocable<T> ListFn>
         requires(!nocontext)
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
-        return Parser<std::invoke_result_t<ListFn, T>, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
+        using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
            return lhs.apply(stream, ctx).map(fn);
         });
     }
@@ -2333,6 +2335,74 @@ auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexc
 // #include <parsecpp/core/lift.h>
 
 
+// #include <parsecpp/utils/constexprString.hpp>
+
+
+namespace prs {
+
+template<std::size_t N>
+struct ConstexprString {
+    std::array<char, N + 1> m_str;
+
+    constexpr ConstexprString(char const(&s)[N + 1]) noexcept {
+        for (std::size_t i = 0; i <= N; ++i) {
+            m_str[i] = s[i];
+        }
+    }
+
+    constexpr ConstexprString(std::array<char, N + 1> arr) noexcept
+        : m_str(arr) {
+    }
+
+    static constexpr ConstexprString<1> fromChar(char c) noexcept {
+        return ConstexprString<1>({c});
+    }
+
+    constexpr const char* c_str() const noexcept {
+        return m_str.data();
+    }
+
+    constexpr size_t size() const noexcept {
+        return N;
+    }
+
+    constexpr std::string_view sv() const noexcept {
+        return std::string_view(c_str(), size());
+    }
+
+    std::string toString() const noexcept {
+        return std::string(c_str(), size());
+    }
+
+    template<std::size_t M>
+    constexpr auto operator+(ConstexprString<M> const& other) const noexcept {
+        std::array<char, N + M + 1> new_str{};
+        for (std::size_t i = 0; i != N; ++i) {
+            new_str[i] = m_str[i];
+        }
+        for (std::size_t i = 0; i != M; ++i) {
+            new_str[N + i] = other.m_str[i];
+        }
+        return ConstexprString<N + M>(new_str);
+    }
+
+    constexpr auto add(char c) const noexcept {
+        return operator+(fromChar(c));
+    }
+
+    constexpr auto between(char c) const noexcept {
+        return fromChar(c) + *this + fromChar(c);
+    }
+};
+
+template <typename T, T... chars>
+constexpr auto operator""_prs() {
+    return ConstexprString<sizeof...(chars)>({chars...});
+}
+
+
+}
+
 namespace prs {
 
 /**
@@ -2472,9 +2542,34 @@ auto searchText(std::string const& searchPattern) noexcept {
     });
 }
 
+template <ConstexprString searchPattern, bool forwardSearch = false>
+auto searchText() noexcept {
+    return Parser<Unit>::make([](Stream& stream) {
+        auto &str = stream.sv();
+        if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
+            if constexpr (forwardSearch) {
+                stream.move(pos > 0 ? pos - 1 : 0);
+                return Parser<Unit>::data({});
+            } else {
+                str = str.substr(pos + searchPattern.size());
+                return Parser<Unit>::data({});
+            }
+        } else {
+            return Parser<Unit>::PRS_MAKE_ERROR("Cannot find '" + searchPattern.toString() + "'", stream.pos());
+        }
+    });
+}
+
 template <LeftCmpWith<char> ...Args>
 constexpr auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
+        return details::cmpAnyOf(c, chars...);
+    });
+}
+
+template <auto ...chars>
+constexpr auto charFrom() noexcept {
+    return satisfy([](char c) {
         return details::cmpAnyOf(c, chars...);
     });
 }
@@ -2574,6 +2669,19 @@ auto literal(std::string str) noexcept {
             return Parser<StringType>::data(StringType{str});
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
+        }
+    });
+}
+
+template <ConstexprString str>
+auto literal() noexcept {
+    using T = std::string_view;
+    return Parser<T>::make([](Stream& s) {
+        if (s.sv().starts_with(str)) {
+            s.move(str.size());
+            return Parser<T>::data(str);
+        } else {
+            return Parser<T>::makeError("Cannot find literal", s.pos());
         }
     });
 }
@@ -2979,6 +3087,11 @@ public:
         };
 
         return foreach<0>(f, std::forward<Args>(args)...);
+    }
+
+    template <typename KeyLike, typename ...Args>
+    constexpr decltype(auto) operator()(KeyLike const& key, Args &&...args) const {
+        return apply(key, std::forward<Args>(args)...);
     }
 
     static constexpr size_t size() noexcept {
