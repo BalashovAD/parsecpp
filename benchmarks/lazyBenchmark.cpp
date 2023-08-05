@@ -28,8 +28,19 @@ Parser<Unit> bracesCache() noexcept {
 }
 
 
+Parser<Unit> bracesCacheConstexpr() noexcept {
+    return (concat(charFrom<'(', '{', '['>(), lazyCached(bracesCacheConstexpr, AutoTagV) >> charFrom<')', '}', ']'>())
+        .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
+}
+
+
 Parser<Drop> bracesCacheDrop() noexcept {
     return (concat(charFrom('(', '{', '['), lazyCached(bracesCacheDrop, AutoTagV) >> charFrom(')', '}', ']'))
+        .cond(checkBraces).drop().repeat<>()).toCommonType();
+}
+
+Parser<Drop> bracesCacheDropConstexpr() noexcept {
+    return (concat(charFrom<'(', '{', '['>(), lazyCached(bracesCacheDropConstexpr, AutoTagV) >> charFrom<')', '}', ']'>())
         .cond(checkBraces).drop().repeat<>()).toCommonType();
 }
 
@@ -43,6 +54,21 @@ auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::d
 
 auto bracesCtx() noexcept {
     return (concat(charFrom('(', '{', '['), lazyCtxBinding<Unit>() >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
+}
+
+auto bracesCtxDrop() noexcept {
+    return (concat(charFrom('(', '{', '['), lazyCtxBinding<Unit>() >> charFrom(')', '}', ']'))
+        .cond(checkBraces).drop().repeat<>() >> success()).toCommonType();
+}
+
+auto bracesCtxDropConstexpr() noexcept {
+    return (concat(charFrom<'(', '{', '['>(), lazyCtxBinding<Unit>() >> charFrom<')', '}', ']'>())
+        .cond(checkBraces).drop().repeat<>() >> success()).toCommonType();
+}
+
+auto bracesCtxConstexpr() noexcept {
+    return (concat(charFrom<'(', '{', '['>(), lazyCtxBinding<Unit>() >> charFrom<')', '}', ']'>())
         .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
 }
 
@@ -76,8 +102,9 @@ void BM_bracesFailure(benchmark::State& state, P parser) {
     state.SetBytesProcessed(130 * state.iterations()); // First error in braces order
 }
 
-void BM_bracesSuccessCtx(benchmark::State& state) {
-    auto baseParser = bracesCtx();
+
+template <ParserType P>
+void BM_bracesSuccessCtx(benchmark::State& state, P baseParser) {
     auto lazyBindingStorage = makeBindingCtx(baseParser);
     auto parser = baseParser.endOfStream();
     auto ctx = parser.makeCtx(lazyBindingStorage);
@@ -93,8 +120,8 @@ void BM_bracesSuccessCtx(benchmark::State& state) {
 }
 
 
-void BM_bracesFailureCtx(benchmark::State& state) {
-    auto baseParser = bracesCtx();
+template <ParserType P>
+void BM_bracesFailureCtx(benchmark::State& state, P baseParser) {
     auto lazyBindingStorage = makeBindingCtx(baseParser);
     auto parser = baseParser.endOfStream();
     auto ctx = parser.makeCtx(lazyBindingStorage);
@@ -111,12 +138,30 @@ void BM_bracesFailureCtx(benchmark::State& state) {
 
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesLazy, bracesLazy().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCached, bracesCache().endOfStream());
+#ifdef ENABLE_HARD_BENCHMARK
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCachedDrop, bracesCacheDrop().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCacheDropConstexpr, bracesCacheDropConstexpr().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCacheConstexpr, bracesCacheConstexpr().endOfStream());
+#endif
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesForget, bracesForget().endOfStream());
-BENCHMARK(BM_bracesSuccessCtx);
+BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtx, bracesCtx());
+#ifdef ENABLE_HARD_BENCHMARK
+BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtxDrop, bracesCtxDrop());
+BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtxDropConstexpr, bracesCtxDropConstexpr());
+BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtxConstexpr, bracesCtxConstexpr());
+#endif
 
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesLazyF, bracesLazy().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedF, bracesCache().endOfStream());
+#ifdef ENABLE_HARD_BENCHMARK
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedDropF, bracesCacheDrop().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesCacheDropConstexprF, bracesCacheDropConstexpr().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesCacheConstexprF, bracesCacheConstexpr().endOfStream());
+#endif
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesForgetF, bracesForget().endOfStream());
-BENCHMARK(BM_bracesFailureCtx);
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxF, bracesCtx());
+#ifdef ENABLE_HARD_BENCHMARK
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxDropF, bracesCtxDrop());
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxDropConstexprF, bracesCtxDropConstexpr());
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxConstexprF, bracesCtxConstexpr());
+#endif

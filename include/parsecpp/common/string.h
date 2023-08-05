@@ -84,10 +84,13 @@ public:
 
     }
 
-    friend bool operator==(FromRange const& range, char c) noexcept {
+    friend constexpr bool operator==(FromRange const& range, char c) noexcept {
         return range.m_begin <= c && c <= range.m_end;
     }
-private:
+
+// no private to be structural and avoid next error:
+// 'prs::FromRange' is not a valid type for a template non-type parameter because it is not structural
+//private:
     char m_begin;
     char m_end;
 };
@@ -113,10 +116,39 @@ auto lettersFrom(Args ...args) noexcept {
     });
 }
 
+template <auto ...args>
+auto lettersFrom() noexcept {
+    static_assert(sizeof...(args) > 0);
+    using T = std::string_view;
+    return make_parser([](Stream& str) {
+        auto start = str.pos();
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        auto end = str.pos();
+        return Parser<T>::data(str.get_sv(start, end));
+    });
+}
+
 template <LeftCmpWith<char> ...Args>
 auto skipChars(Args ...args) noexcept {
     static_assert(sizeof...(args) > 0);
     return make_parser([args...](Stream& str) {
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        return Parser<Drop>::data({});
+    });
+}
+
+
+
+template <auto ...args>
+auto skipChars() noexcept {
+    static_assert(sizeof...(args) > 0);
+    return make_parser([](Stream& str) {
         while (str.checkFirst([&](char c) {
             return ((args == c) || ...);
         }));
@@ -257,6 +289,21 @@ auto until(Args ...args) noexcept {
 }
 
 
+template <auto ...args>
+auto until() noexcept {
+    using StringType = std::string_view;
+    return Parser<StringType>::make([](Stream& stream) {
+        auto start = stream.pos();
+        while (stream.checkFirst([&](char c) {
+            return !((args == c) || ...);
+        }));
+
+        auto end = stream.pos();
+        return Parser<StringType>::data(StringType{stream.get_sv(start, end)});
+    });
+}
+
+
 template <ParserType Parser>
 auto between(char border, Parser parser) noexcept {
     return between(border, border, std::move(parser));
@@ -277,13 +324,13 @@ auto literal(std::string str) noexcept {
 
 template <ConstexprString str>
 auto literal() noexcept {
-    using T = std::string_view;
-    return Parser<T>::make([](Stream& s) {
+    using StringType = std::string_view;
+    return Parser<StringType>::make([](Stream& s) {
         if (s.sv().starts_with(str)) {
             s.move(str.size());
-            return Parser<T>::data(str);
+            return Parser<StringType>::data(str);
         } else {
-            return Parser<T>::makeError("Cannot find literal", s.pos());
+            return Parser<StringType>::makeError("Cannot find literal", s.pos());
         }
     });
 }
