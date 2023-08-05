@@ -39,6 +39,15 @@ TEST(String, lettersFrom) {
     success_parsing(parser, "test", "test test", " test");
 }
 
+TEST(String, lettersFromConstexpr) {
+    auto parser = lettersFrom<FromRange('a', 'z'), 'A', 'B', 'C'>();
+
+    success_parsing(parser, "test", "test", "");
+    success_parsing(parser, "tAesCt", "tAesCt", "");
+    success_parsing(parser, "", "Ztest", "Ztest");
+    success_parsing(parser, "test", "test test", " test");
+}
+
 TEST(String, skipChars) {
     auto parser = skipChars(FromRange('a', 'z'), 'A', 'B', 'C');
 

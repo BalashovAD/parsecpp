@@ -2,6 +2,31 @@
 
 namespace prs {
 
+namespace details {
+
+template<std::size_t N>
+struct MakeArray
+{
+    std::array<char, N> data;
+
+    template <std::size_t... Is>
+    constexpr MakeArray(char const(&arr)[N], std::integer_sequence<std::size_t, Is...>)
+        : data{arr[Is]...} {
+
+    }
+
+    constexpr MakeArray(char const(&arr)[N])
+        : MakeArray(arr, std::make_integer_sequence<std::size_t, N>()) {
+
+    }
+
+    constexpr auto size() const {
+        return N;
+    }
+};
+
+}
+
 template<std::size_t N>
 struct ConstexprString {
     std::array<char, N + 1> m_str;
@@ -14,6 +39,12 @@ struct ConstexprString {
 
     constexpr ConstexprString(std::array<char, N + 1> arr) noexcept
         : m_str(arr) {
+    }
+
+    constexpr ConstexprString(details::MakeArray<N + 1> arr) noexcept{
+        for (size_t i = 0; i != N + 1; ++i) {
+            m_str[i] = arr.data[i];
+        }
     }
 
     static constexpr ConstexprString<1> fromChar(char c) noexcept {
@@ -57,9 +88,9 @@ struct ConstexprString {
     }
 };
 
-template <typename T, T... chars>
+template <details::MakeArray arr>
 constexpr auto operator""_prs() {
-    return ConstexprString<sizeof...(chars)>({chars...});
+    return ConstexprString<arr.size() - 1>(arr);
 }
 
 

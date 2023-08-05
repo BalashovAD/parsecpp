@@ -36,7 +36,7 @@ auto number() noexcept {
                 // TODO: get error and pos from res
                 return Parser<Number>::makeError("Cannot parse number", s.pos());
             }
-        } else {
+        } else { // some system doesn't have from_chars for floating point numbers
             if constexpr (std::is_same_v<Number, double>) {
                 char *end = const_cast<char*>(sv.end());
                 n = std::strtod(sv.data(), &end);
@@ -50,7 +50,17 @@ auto number() noexcept {
                 s.moveUnsafe(endIndex);
                 return Parser<Number>::data(n);
             } else if (std::is_same_v<Number, float>) {
-
+                char *end = const_cast<char*>(sv.end());
+                n = std::strtof(sv.data(), &end);
+                size_t endIndex = end - sv.data();
+                if (endIndex == 0) {
+                    return Parser<Number>::makeError("Cannot parse number", s.pos());
+                }
+                if (errno == ERANGE) {
+                    return Parser<Number>::makeError("Cannot parse number ERANGE", s.pos());
+                }
+                s.moveUnsafe(endIndex);
+                return Parser<Number>::data(n);
             } else {
                 static_assert(!std::is_void_v<Number>, "Number type doesn't support");
                 return Parser<Number>::makeError("Not supported", s.pos());
@@ -66,6 +76,11 @@ auto number() noexcept {
  */
 constexpr auto digit() noexcept {
     return charFrom(FromRange('0', '9'));
+}
+
+
+inline auto digits() noexcept {
+    return lettersFrom<FromRange('0', '9')>();
 }
 
 }

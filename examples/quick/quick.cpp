@@ -144,7 +144,7 @@ struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
 };
 
 void countSum() noexcept {
-    auto parser = (concat(charFrom('(') >> number(), charFrom(';') >> number() << charFrom(')')) * CountSumRepeat{}).endOfStream();
+    auto parser = (concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>()) * CountSumRepeat{}).endOfStream();
     Stream example("(1.5;3)(2;1)(0;3)");
     parser(example).join([](double sum) {
         std::cout << "Count sum: " << sum << std::endl;
