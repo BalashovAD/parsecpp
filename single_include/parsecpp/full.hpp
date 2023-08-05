@@ -2340,6 +2340,31 @@ auto toMap(ParserKey tKey, ParserValue tValue, ParserDelimiter tDelimiter) noexc
 
 namespace prs {
 
+namespace details {
+
+template<std::size_t N>
+struct MakeArray
+{
+    std::array<char, N> data;
+
+    template <std::size_t... Is>
+    constexpr MakeArray(char const(&arr)[N], std::integer_sequence<std::size_t, Is...>)
+        : data{arr[Is]...} {
+
+    }
+
+    constexpr MakeArray(char const(&arr)[N])
+        : MakeArray(arr, std::make_integer_sequence<std::size_t, N>()) {
+
+    }
+
+    constexpr auto size() const {
+        return N;
+    }
+};
+
+}
+
 template<std::size_t N>
 struct ConstexprString {
     std::array<char, N + 1> m_str;
@@ -2352,6 +2377,12 @@ struct ConstexprString {
 
     constexpr ConstexprString(std::array<char, N + 1> arr) noexcept
         : m_str(arr) {
+    }
+
+    constexpr ConstexprString(details::MakeArray<N + 1> arr) noexcept{
+        for (size_t i = 0; i != N + 1; ++i) {
+            m_str[i] = arr.data[i];
+        }
     }
 
     static constexpr ConstexprString<1> fromChar(char c) noexcept {
@@ -2395,9 +2426,9 @@ struct ConstexprString {
     }
 };
 
-template <typename T, T... chars>
+template <details::MakeArray arr>
 constexpr auto operator""_prs() {
-    return ConstexprString<sizeof...(chars)>({chars...});
+    return ConstexprString<arr.size() - 1>(arr);
 }
 
 
@@ -2482,10 +2513,13 @@ public:
 
     }
 
-    friend bool operator==(FromRange const& range, char c) noexcept {
+    friend constexpr bool operator==(FromRange const& range, char c) noexcept {
         return range.m_begin <= c && c <= range.m_end;
     }
-private:
+
+// no private to be structural and avoid next error:
+// 'prs::FromRange' is not a valid type for a template non-type parameter because it is not structural
+//private:
     char m_begin;
     char m_end;
 };
@@ -2511,10 +2545,39 @@ auto lettersFrom(Args ...args) noexcept {
     });
 }
 
+template <auto ...args>
+auto lettersFrom() noexcept {
+    static_assert(sizeof...(args) > 0);
+    using T = std::string_view;
+    return make_parser([](Stream& str) {
+        auto start = str.pos();
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        auto end = str.pos();
+        return Parser<T>::data(str.get_sv(start, end));
+    });
+}
+
 template <LeftCmpWith<char> ...Args>
 auto skipChars(Args ...args) noexcept {
     static_assert(sizeof...(args) > 0);
     return make_parser([args...](Stream& str) {
+        while (str.checkFirst([&](char c) {
+            return ((args == c) || ...);
+        }));
+
+        return Parser<Drop>::data({});
+    });
+}
+
+
+
+template <auto ...args>
+auto skipChars() noexcept {
+    static_assert(sizeof...(args) > 0);
+    return make_parser([](Stream& str) {
         while (str.checkFirst([&](char c) {
             return ((args == c) || ...);
         }));
@@ -2655,6 +2718,21 @@ auto until(Args ...args) noexcept {
 }
 
 
+template <auto ...args>
+auto until() noexcept {
+    using StringType = std::string_view;
+    return Parser<StringType>::make([](Stream& stream) {
+        auto start = stream.pos();
+        while (stream.checkFirst([&](char c) {
+            return !((args == c) || ...);
+        }));
+
+        auto end = stream.pos();
+        return Parser<StringType>::data(StringType{stream.get_sv(start, end)});
+    });
+}
+
+
 template <ParserType Parser>
 auto between(char border, Parser parser) noexcept {
     return between(border, border, std::move(parser));
@@ -2675,13 +2753,13 @@ auto literal(std::string str) noexcept {
 
 template <ConstexprString str>
 auto literal() noexcept {
-    using T = std::string_view;
-    return Parser<T>::make([](Stream& s) {
+    using StringType = std::string_view;
+    return Parser<StringType>::make([](Stream& s) {
         if (s.sv().starts_with(str)) {
             s.move(str.size());
-            return Parser<T>::data(str);
+            return Parser<StringType>::data(str);
         } else {
-            return Parser<T>::makeError("Cannot find literal", s.pos());
+            return Parser<StringType>::makeError("Cannot find literal", s.pos());
         }
     });
 }
@@ -2781,7 +2859,7 @@ auto number() noexcept {
                 // TODO: get error and pos from res
                 return Parser<Number>::makeError("Cannot parse number", s.pos());
             }
-        } else {
+        } else { // some system doesn't have from_chars for floating point numbers
             if constexpr (std::is_same_v<Number, double>) {
                 char *end = const_cast<char*>(sv.end());
                 n = std::strtod(sv.data(), &end);
@@ -2795,7 +2873,17 @@ auto number() noexcept {
                 s.moveUnsafe(endIndex);
                 return Parser<Number>::data(n);
             } else if (std::is_same_v<Number, float>) {
-
+                char *end = const_cast<char*>(sv.end());
+                n = std::strtof(sv.data(), &end);
+                size_t endIndex = end - sv.data();
+                if (endIndex == 0) {
+                    return Parser<Number>::makeError("Cannot parse number", s.pos());
+                }
+                if (errno == ERANGE) {
+                    return Parser<Number>::makeError("Cannot parse number ERANGE", s.pos());
+                }
+                s.moveUnsafe(endIndex);
+                return Parser<Number>::data(n);
             } else {
                 static_assert(!std::is_void_v<Number>, "Number type doesn't support");
                 return Parser<Number>::makeError("Not supported", s.pos());
@@ -2811,6 +2899,11 @@ auto number() noexcept {
  */
 constexpr auto digit() noexcept {
     return charFrom(FromRange('0', '9'));
+}
+
+
+inline auto digits() noexcept {
+    return lettersFrom<FromRange('0', '9')>();
 }
 
 }
