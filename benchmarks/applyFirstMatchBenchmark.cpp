@@ -2,8 +2,10 @@
 
 #include <parsecpp/full.hpp>
 
+#include "benchmarkHelper.hpp"
+
+template <size_t testSize = 10000>
 inline auto generateChallenge(size_t maxN) noexcept {
-    constexpr auto testSize = 1000;
     std::array<unsigned, testSize> out{};
 
     for (size_t i = 0; i != testSize; ++i) {
@@ -106,16 +108,27 @@ constexpr auto a18 = prs::details::makeFirstMatch(0,
 using Map = std::map<unsigned, unsigned>;
 using UnorderedMap = std::unordered_map<unsigned, unsigned>;
 
+#ifdef ENABLE_HARD_BENCHMARK
+
 BENCHMARK_CAPTURE(BM_ApplyFirstMatch, Value3Items, a3, 4);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchSwitch3, If3Items, 4);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatch, Value9Items, a9, 10);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchSwitch9, If9Items, 10);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, Map9Items, Map{}, 9, 10);
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UnMap9Items, UnorderedMap{}, 9, 10);
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UMap9Items, UnorderedMap{}, 9, 10);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatch, Value9ItemsMiss, a9, 20);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchSwitch9, If9ItemsMiss, 20);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, Map9ItemsMiss, Map{}, 9, 20);
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UnMap9ItemsMiss, UnorderedMap{}, 9, 20);
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UMap9ItemsMiss, UnorderedMap{}, 9, 20);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatch, Value18Items, a18, 19);
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, Map18Items, Map{}, 18, 19);
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UnMap18Items, UnorderedMap{}, 18, 19);
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UMap18Items, UnorderedMap{}, 18, 19);
+
+#else
+
+BENCHMARK_CAPTURE(BM_ApplyFirstMatch, Value9ItemsMiss, a9, 20);
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchSwitch9, If9ItemsMiss, 20);
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, Map9ItemsMiss, Map{}, 9, 20);
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMap, UMap9ItemsMiss, UnorderedMap{}, 9, 20);
+
+#endif

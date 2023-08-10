@@ -10,7 +10,7 @@ template <std::invocable Fn>
 class Finally {
 public:
     template <typename F>
-        requires(std::is_constructible_v<Fn, F>)
+        requires(std::is_constructible_v<Fn, F> && !std::is_same_v<Finally, F>)
     explicit Finally(F&& fn) noexcept(std::is_nothrow_constructible_v<Fn, F>)
         : m_fn(std::forward<F>(fn)) {
 
