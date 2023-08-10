@@ -182,19 +182,6 @@ void usingBracesCtx() {
 }
 ```
 
-Benchmark result:
-```
-BM_bracesSuccess/bracesLazy_median               784 ns
-BM_bracesSuccess/bracesCached_median             433 ns
-BM_bracesSuccess/bracesCachedDrop_median         312 ns
-BM_bracesSuccess/bracesForget_median             429 ns
-
-BM_bracesFailure/bracesLazyF_median              499 ns
-BM_bracesFailure/bracesCachedF_median            273 ns
-BM_bracesFailure/bracesCachedDropF_median        197 ns
-BM_bracesFailure/bracesForgetF_median            268 ns
-```
-
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
 
 ## Build-in operators
