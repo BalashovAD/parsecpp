@@ -59,16 +59,19 @@ struct BenchInfo {
     struct TimePrinter {
         BenchDuration time;
 
+        // some std implementation doesn't overload operator<< for chrono::duration
         friend std::ostream& operator<<(std::ostream& os, TimePrinter const& printer) noexcept {
+            // should use another ostream to print twice to save std::setw value
+            std::stringstream strStream;
             if (printer.time < microseconds(25)) {
-                os << printer.time;
+                strStream << printer.time.count() << "ns";
             } else if (printer.time < milliseconds(10)) {
-                os << duration_cast<duration<double, microseconds::period>>(printer.time);
+                strStream << duration_cast<duration<double, microseconds::period>>(printer.time).count() << "us";
             } else {
-                os << duration_cast<duration<double, milliseconds::period>>(printer.time);
+                strStream << duration_cast<duration<double, milliseconds::period>>(printer.time).count() << "ms";
             }
 
-            return os;
+            return os << strStream.str();
         }
     };
 
