@@ -2075,7 +2075,7 @@ public:
 template <ParserType Parser>
 class ModifyCaller : public ModifyCallerI<GetParserResult<Parser>> {
 public:
-    using Type = ModifyCallerI<GetParserResult<Parser>>::Type;
+    using Type = typename ModifyCallerI<GetParserResult<Parser>>::Type;
 
     ModifyCaller(Parser const& p, Stream& s) noexcept
         : m_parser(p)
@@ -2368,17 +2368,17 @@ template<std::size_t N>
 struct ConstexprString {
     std::array<char, N + 1> m_str;
 
-    constexpr ConstexprString(char const(&s)[N + 1]) noexcept {
+    constexpr explicit ConstexprString(char const(&s)[N + 1]) noexcept {
         for (std::size_t i = 0; i <= N; ++i) {
             m_str[i] = s[i];
         }
     }
 
-    constexpr ConstexprString(std::array<char, N + 1> arr) noexcept
+    constexpr explicit ConstexprString(std::array<char, N + 1> arr) noexcept
         : m_str(arr) {
     }
 
-    constexpr ConstexprString(details::MakeArray<N + 1> arr) noexcept{
+    constexpr explicit ConstexprString(details::MakeArray<N + 1> arr) noexcept{
         for (size_t i = 0; i != N + 1; ++i) {
             m_str[i] = arr.data[i];
         }
@@ -2422,6 +2422,52 @@ struct ConstexprString {
 
     constexpr auto between(char c) const noexcept {
         return fromChar(c) + *this + fromChar(c);
+    }
+
+
+    constexpr auto between(char l, char r) const noexcept {
+        return fromChar(l) + *this + fromChar(r);
+    }
+
+
+    template <size_t M>
+    constexpr bool operator==(ConstexprString<M> const& rhs) const noexcept {
+        if constexpr (M != N) {
+            return false;
+        } else {
+            for (auto i = 0; i != N; ++i) {
+                if (rhs[i] != this->operator[](i)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    template <size_t M>
+    constexpr bool operator!=(ConstexprString<M> const& rhs) const noexcept {
+        return !operator==(rhs);
+    }
+
+    constexpr auto operator[](size_t i) const noexcept {
+        return m_str[i];
+    }
+
+
+    template <size_t M>
+    constexpr ConstexprString<std::min(M, N)> substr() const noexcept {
+        constexpr auto T = std::min(M, N);
+        std::array<char, T + 1> out{};
+        for (auto i = 0; i != T; ++i) {
+            out[i] = operator[](i);
+        }
+        return ConstexprString<T>(out);
+    }
+
+    template <size_t M>
+    requires(M <= N)
+    constexpr bool startsFrom(ConstexprString<M> const& prefix) const noexcept {
+        return substr<M>() == prefix;
     }
 };
 
