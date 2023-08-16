@@ -75,7 +75,7 @@ auto number() noexcept {
  * @return Parser<char>
  */
 constexpr auto digit() noexcept {
-    return charFrom(FromRange('0', '9'));
+    return charFrom<FromRange('0', '9')>();
 }
 
 

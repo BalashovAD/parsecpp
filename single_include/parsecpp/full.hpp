@@ -828,6 +828,11 @@ public:
         return m_currentStr;
     }
 
+
+    std::string_view const& sv() const noexcept {
+        return m_currentStr;
+    }
+
     char front() const noexcept {
         assert(!eos());
         return m_currentStr[0];
@@ -2500,6 +2505,7 @@ inline auto anyChar() noexcept {
     return make_parser(p);
 }
 
+
 /**
  *
  * @return Parser<Unit>
@@ -2551,6 +2557,7 @@ auto letters() noexcept {
     });
 }
 
+
 class FromRange {
 public:
     constexpr FromRange(char begin, char end) noexcept
@@ -2571,11 +2578,21 @@ public:
 };
 
 
+struct AnySpace {
+    constexpr AnySpace() = default;
+
+    friend constexpr bool operator==(AnySpace const& range, char c) noexcept {
+        return std::isspace(c);
+    }
+};
+
+
 template <typename T, typename U>
 concept LeftCmpWith = requires(const std::remove_reference_t<T>& t,
         const std::remove_reference_t<U>& u) {
     {t == u} -> std::convertible_to<bool>; // boolean-testable
 };
+
 
 template <typename StringType = std::string_view, LeftCmpWith<char> ...Args>
 auto lettersFrom(Args ...args) noexcept {
@@ -2590,6 +2607,7 @@ auto lettersFrom(Args ...args) noexcept {
         return Parser<StringType>::data(StringType{str.get_sv(start, end)});
     });
 }
+
 
 template <auto ...args>
 auto lettersFrom() noexcept {
@@ -2606,6 +2624,7 @@ auto lettersFrom() noexcept {
     });
 }
 
+
 template <LeftCmpWith<char> ...Args>
 auto skipChars(Args ...args) noexcept {
     static_assert(sizeof...(args) > 0);
@@ -2617,7 +2636,6 @@ auto skipChars(Args ...args) noexcept {
         return Parser<Drop>::data({});
     });
 }
-
 
 
 template <auto ...args>
@@ -2651,6 +2669,7 @@ auto searchText(std::string const& searchPattern) noexcept {
     });
 }
 
+
 template <ConstexprString searchPattern, bool forwardSearch = false>
 auto searchText() noexcept {
     return Parser<Unit>::make([](Stream& stream) {
@@ -2669,12 +2688,14 @@ auto searchText() noexcept {
     });
 }
 
+
 template <LeftCmpWith<char> ...Args>
 constexpr auto charFrom(Args ...chars) noexcept {
     return satisfy([=](char c) {
         return details::cmpAnyOf(c, chars...);
     });
 }
+
 
 template <auto ...chars>
 constexpr auto charFrom() noexcept {
@@ -2688,6 +2709,7 @@ template <LeftCmpWith<char> ...Args>
 auto charFromSpaces(Args ...chars) noexcept {
     return spaces() >> charFrom(std::forward<Args>(chars)...) << spaces();
 }
+
 
 template <typename StringType = std::string_view>
 auto between(char borderLeft, char borderRight) noexcept {
@@ -2710,6 +2732,7 @@ auto between(char borderLeft, char borderRight) noexcept {
         return P::data(StringType{ans});
     });
 }
+
 
 template <typename StringType = std::string_view>
 auto between(char border) noexcept {
@@ -2735,6 +2758,7 @@ auto until(Fn fn) noexcept {
         return Parser<StringType>::data(StringType{stream.get_sv(start, end)});
     });
 }
+
 
 template <typename StringType = std::string_view, std::predicate<char, Stream&> Fn>
 auto until(Fn fn) noexcept {
@@ -2779,6 +2803,24 @@ auto until() noexcept {
 }
 
 
+inline auto nextLine() noexcept {
+    return Parser<Unit>::make([](Stream& stream) {
+        auto sv = stream.sv();
+        for (size_t i = 0; i != sv.size(); ++i) {
+            if (sv[i] == '\n' || sv[i] == '\r') {
+                if (sv[i] == '\r' && (i + 1) < sv.size() && sv[i + 1] == '\n') {
+                    ++i;
+                }
+                stream.moveUnsafe(i);
+                return Parser<Unit>::data({});
+            }
+        }
+        stream.sv() = "";
+        return Parser<Unit>::data({}); // return empty view if no new line found
+    });
+}
+
+
 template <ParserType Parser>
 auto between(char border, Parser parser) noexcept {
     return between(border, border, std::move(parser));
@@ -2801,9 +2843,9 @@ template <ConstexprString str>
 auto literal() noexcept {
     using StringType = std::string_view;
     return Parser<StringType>::make([](Stream& s) {
-        if (s.sv().starts_with(str)) {
+        if (s.sv().starts_with(str.sv())) {
             s.move(str.size());
-            return Parser<StringType>::data(str);
+            return Parser<StringType>::data(str.sv());
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
         }
@@ -2944,7 +2986,7 @@ auto number() noexcept {
  * @return Parser<char>
  */
 constexpr auto digit() noexcept {
-    return charFrom(FromRange('0', '9'));
+    return charFrom<FromRange('0', '9')>();
 }
 
 
