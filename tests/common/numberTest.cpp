@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-TEST(Base, ParseUnsigned) {
+TEST(Number, ParseUnsigned) {
     auto parser = number<unsigned>();
 
     success_parsing(parser, 4u, "4", "");
@@ -25,7 +25,7 @@ TEST(Base, ParseUnsigned) {
 }
 
 
-TEST(Base, ParseDouble) {
+TEST(Number, ParseDouble) {
     auto parser = number<double>();
 
     success_parsing(parser, 4., "4", "");
@@ -49,5 +49,27 @@ TEST(Base, ParseDouble) {
 
     failed_parsing(parser, 0, "a");
     failed_parsing(parser, 0, " ");
+    failed_parsing(parser, 0, "");
+}
+
+TEST(Number, Digits) {
+    auto parser = digits();
+    success_parsing(parser, "234", "234a", "a");
+    success_parsing(parser, "1", "1", "");
+
+    // no length boundaries
+    success_parsing(parser, "123456789012345678901234567890", "123456789012345678901234567890x", "x");
+
+    // always success
+    success_parsing(parser, "", "x", "x");
+    success_parsing(parser, "", "", "");
+}
+
+TEST(Number, Digit) {
+    auto parser = digit();
+    success_parsing(parser, '2', "234a", "34a");
+    success_parsing(parser, '1', "1", "");
+
+    failed_parsing(parser, 0, "abc");
     failed_parsing(parser, 0, "");
 }
