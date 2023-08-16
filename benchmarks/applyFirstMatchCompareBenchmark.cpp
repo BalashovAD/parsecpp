@@ -352,14 +352,14 @@ static inline const std::unordered_map<std::string_view, int> umap23 = {
 
 #define GEN_TEST_FOR(n) \
 static inline auto challengeW ## n = generateChallengeSamplesWithWeights(n); \
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchStrings, Apply ## n ## Weights, apply ## n, challengeW4, n);\
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyMap ## n ## Weights, map ## n, challengeW4, n);\
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyUMap ## n ## Weights, umap ## n, challengeW4, n); \
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchStrings, Apply ## n ## Weights, apply ## n, challengeW ## n, n);\
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyMap ## n ## Weights, map ## n, challengeW ## n, n);\
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyUMap ## n ## Weights, umap ## n, challengeW ## n, n); \
                         \
 static inline auto challengeR ## n = generateChallengeSamplesWithoutWeights(n);\
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchStrings, Apply ## n ## Random, apply ## n, challengeR4, n);\
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyMap ## n ## Random, map ## n, challengeR4, n);\
-BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyUMap ## n ## Random, umap ## n, challengeR4, n);\
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchStrings, Apply ## n ## Random, apply ## n, challengeR ## n, n);\
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyMap ## n ## Random, map ## n, challengeR ## n, n);\
+BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyUMap ## n ## Random, umap ## n, challengeR ## n, n);\
 
 #ifdef ENABLE_HARD_BENCHMARK
 GEN_TEST_FOR(4);

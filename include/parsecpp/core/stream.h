@@ -32,6 +32,11 @@ public:
         return m_currentStr;
     }
 
+
+    std::string_view const& sv() const noexcept {
+        return m_currentStr;
+    }
+
     char front() const noexcept {
         assert(!eos());
         return m_currentStr[0];

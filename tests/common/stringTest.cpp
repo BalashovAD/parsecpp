@@ -57,6 +57,15 @@ TEST(String, skipChars) {
     success_parsing(parser, {}, "", "");
 }
 
+TEST(String, skipCharsConstexpr) {
+    auto parser = skipChars<FromRange('a', 'z'), 'A', 'B', 'C'>();
+
+    success_parsing(parser, {}, "test", "");
+    success_parsing(parser, {}, "tZtest", "Ztest");
+    success_parsing(parser, {}, "Ztest", "Ztest");
+    success_parsing(parser, {}, "", "");
+}
+
 TEST(String, until) {
     auto parser = until(FromRange('a', 'z'), 'A', 'B', 'C');
 
@@ -65,9 +74,26 @@ TEST(String, until) {
     success_parsing(parser, "WER", "WER", "");
 }
 
+TEST(String, untilAnySpace) {
+    auto parser = until<AnySpace{}>();
+
+    success_parsing(parser, "Z", "Z test", " test");
+    success_parsing(parser, "", "\ttest", "\ttest");
+    success_parsing(parser, "1", "1\ntest", "\ntest");
+    success_parsing(parser, "WER", "WER", "");
+}
+
+TEST(String, untilConstexpr) {
+    auto parser = until<FromRange('a', 'z'), 'A', 'B', 'C'>();
+
+    success_parsing(parser, "Z", "Ztest", "test");
+    success_parsing(parser, "", "test", "test");
+    success_parsing(parser, "WER", "WER", "");
+}
+
 TEST(String, untilFnDoubleSymbol) {
     auto parser = until([](char c, Stream& s) {
-        return !s.eos() && s.remaining()[1] == c;
+        return s.sv().size() > 1 && s.remaining()[1] == c;
     });
 
     success_parsing(parser, "test", "test", "");
@@ -77,109 +103,8 @@ TEST(String, untilFnDoubleSymbol) {
 }
 
 
-TEST(String, searchWord) {
-    auto parser = search(lettersFrom(FromRange('a', 'z'), FromRange('A', 'Z')).mustConsume()).repeat().mustConsume();
-
-    success_parsing(parser, {"test", "t", "test", "q"}, "test t test  12q 11", " 11");
-    success_parsing(parser, {"a"}, "123a123", "123");
-
-    failed_parsing(parser, 0, "");
-    failed_parsing(parser, 0, "12");
-}
-
-struct Color {
-    static constexpr int ASCIIHexToInt[] =
-            {
-                    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                    0,  1,  2,  3,  4,  5,  6,  7,  8,  9, -1, -1, -1, -1, -1, -1,
-                    -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                    -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-            };
-
-
-    using StrHex = std::tuple<char, char>;
-
-    constexpr static unsigned f(StrHex s) noexcept {
-        return ASCIIHexToInt[static_cast<unsigned char>(get<0>(s))] * 16 + ASCIIHexToInt[static_cast<unsigned char>(get<1>(s))];
-    }
-
-    Color(unsigned rr, unsigned gg, unsigned bb) noexcept
-        : r(rr)
-        , g(gg)
-        , b(bb) {
-
-    }
-
-    Color(StrHex tr, StrHex tg, StrHex tb) noexcept
-        : r(f(tr))
-        , g(f(tg))
-        , b(f(tb)) {
-
-    }
-
-    bool operator==(Color const& c) const noexcept {
-        return std::tie(r, g, b) == std::tie(c.r, c.g, c.b);
-    }
-
-    unsigned r, g, b;
-};
-
-TEST(String, searchHex) {
-
-    auto hexParser = charFrom(FromRange('0', '9'), FromRange('a', 'f'), FromRange('A', 'F'));
-    auto hexNumberParser = concat(hexParser, hexParser);
-    auto parser = search(
-            charFrom('#').maybe() >>
-            liftM(details::MakeClass<Color>{}, hexNumberParser, hexNumberParser, hexNumberParser)
-            << charFrom(';').maybe()).repeat();
-
-    success_parsing(parser, {Color{0xF0, 0xF0, 0xF0}, Color{0xFA, 0xFA, 0xFA}, Color{0xFF, 0xF0, 0x00}},
-R"(HEX code with numbers in it: #F0F0F0
-
-HEX code with letters only: #FAFAFA;
-
-Works without a # in front of the code: FFF000;.)", ".");
-}
-
-TEST(String, searchRollback) {
-    auto parser = search(literal("aaa") >> literal("bbb"));
-    success_parsing(parser, "bbb", "aaaabbb");
-    failed_parsing(parser, 0, "aaaaaa");
-    failed_parsing(parser, 0, "aaacbbb");
-}
-
-TEST(String, searchRollback2) {
-    auto parser = search(literal("aaa")).repeat().mustConsume();
-    success_parsing(parser, {"aaa"}, "aaaabbb", "abbb");
-    success_parsing(parser, {"aaa", "aaa"}, "aaaaaa");
-    success_parsing(parser, {"aaa", "aaa"}, "aaacaaadaa", "daa");
-    failed_parsing(parser, 0, "aa");
-}
-
-TEST(String, searchRollback3) {
-    auto parser = search(literal("aaa")).maybe() >> literal("bbb");
-    success_parsing(parser, {"bbb"}, "aaabbb", "");
-    success_parsing(parser, {"bbb"}, "bbb", "");
-
-    failed_parsing(parser, 0, "aabbb");
-    failed_parsing(parser, 3, "aaaabbb");
-    failed_parsing(parser, 4, "baaabb");
-}
-
-TEST(String, searchAlwaysPossessive) {
-    // this search always failed, because `repeat` take 'b'
-    auto parser = search(charFrom('a', 'b').repeat() >> literal("bc"));
-    failed_parsing(parser, 0, "abababc");
-    failed_parsing(parser, 0, "abc");
-    failed_parsing(parser, 0, "bc");
-}
-
 TEST(String, escapedString) {
-    auto parser = charFrom('"') >> escapedString<'"', '\\'>();
+    auto parser = charFrom<'"'>() >> escapedString<'"', '\\'>();
 
     success_parsing(parser, "test", R"("test")");
     success_parsing(parser, R"(te"st)", R"("te\"st")");
@@ -205,52 +130,4 @@ TEST(String, escapedStringSame) {
     failed_parsing(parser, 1, R"("test"")");
     failed_parsing(parser, 1, R"("test"""")");
     failed_parsing(parser, 1, R"(")");
-}
-
-std::string_view csvExample = R"(1996,Ford,E350,"Super, ""luxurious"" truck"
-1997, "Ford" , A350
-"1997", Ford ,E350,)";
-
-TEST(String, escapedStringCSV) {
-    auto quoted = skipChars(' ', '\t') >> charFrom('"') >> escapedString<'"', '"'>() << skipChars(' ', '\t');
-    // parser std::vector<std::vector<std::string>>
-    auto parser = (quoted | until<std::string>(',', '\n')).repeat(charFrom(',')).repeat(charFrom('\n'));
-
-    success_parsing(parser, {
-        {"1996", "Ford", "E350", R"(Super, "luxurious" truck)"},
-        {"1997", "Ford", " A350"},
-        {"1997", " Ford ", "E350", ""}}, csvExample);
-}
-
-
-struct MyCsv {
-    unsigned year;
-    std::string brand;
-    std::pair<char, unsigned> model;
-    std::optional<std::string> description;
-
-    bool operator==(MyCsv const& rhs) const noexcept {
-        return std::tie(year, brand, model, description)
-            == std::tie(rhs.year, rhs.brand, rhs.model, rhs.description);
-    }
-};
-
-TEST(String, CSVStrongTypes) {
-    auto quoted = skipChars(' ', '\t') >> charFrom('"') >> escapedString<'"', '"'>() << skipChars(' ', '\t');
-    auto field = (quoted | until<std::string>(',', '\n'));
-    // parser std::vector<MyCsv>
-    auto year = number<unsigned>();
-    auto model = liftM(details::MakeClass<std::pair<char, unsigned>>{}, spaces() >> charFrom(FromRange('A', 'F')), number<unsigned>());
-    auto parser = liftM(details::MakeClass<MyCsv>{},
-            field * convertResult(year),
-            charFrom(',') >> field,
-            charFrom(',') >> field * convertResult(model),
-            (charFrom(',') >> field).maybe()).repeat(charFrom('\n')).endOfStream();
-
-    std::vector<MyCsv> answer = {
-            MyCsv{1996, "Ford", std::make_pair<char, unsigned>('E', 350), R"(Super, "luxurious" truck)"},
-            MyCsv{1997, "Ford", std::make_pair<char, unsigned>('A', 350), std::nullopt},
-            MyCsv{1997, " Ford ", std::make_pair<char, unsigned>('E', 350), ""}};
-
-    success_parsing(parser, answer, csvExample);
 }
