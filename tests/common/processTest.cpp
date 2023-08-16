@@ -45,3 +45,47 @@ TEST(Process, ConvertResultFull) {
     failed_parsing(parser, 2, "12p4|A");
     failed_parsing(parser, 0, "tt|tt");
 }
+
+
+TEST(Process, searchWord) {
+    auto parser = search(lettersFrom(FromRange('a', 'z'), FromRange('A', 'Z')).mustConsume()).repeat().mustConsume();
+
+    success_parsing(parser, {"test", "t", "test", "q"}, "test t test  12q 11", " 11");
+    success_parsing(parser, {"a"}, "123a123", "123");
+
+    failed_parsing(parser, 0, "");
+    failed_parsing(parser, 0, "12");
+}
+
+TEST(Process, searchRollback) {
+    auto parser = search(literal("aaa") >> literal("bbb"));
+    success_parsing(parser, "bbb", "aaaabbb");
+    failed_parsing(parser, 0, "aaaaaa");
+    failed_parsing(parser, 0, "aaacbbb");
+}
+
+TEST(Process, searchRollback2) {
+    auto parser = search(literal("aaa")).repeat().mustConsume();
+    success_parsing(parser, {"aaa"}, "aaaabbb", "abbb");
+    success_parsing(parser, {"aaa", "aaa"}, "aaaaaa");
+    success_parsing(parser, {"aaa", "aaa"}, "aaacaaadaa", "daa");
+    failed_parsing(parser, 0, "aa");
+}
+
+TEST(Process, searchRollback3) {
+    auto parser = search(literal("aaa")).maybe() >> literal("bbb");
+    success_parsing(parser, {"bbb"}, "aaabbb", "");
+    success_parsing(parser, {"bbb"}, "bbb", "");
+
+    failed_parsing(parser, 0, "aabbb");
+    failed_parsing(parser, 3, "aaaabbb");
+    failed_parsing(parser, 4, "baaabb");
+}
+
+TEST(Process, searchAlwaysPossessive) {
+    // this search always failed, because `repeat` take 'b'
+    auto parser = search(charFrom<'a', 'b'>().repeat() >> literal<"bc"_prs>());
+    failed_parsing(parser, 0, "abababc");
+    failed_parsing(parser, 0, "abc");
+    failed_parsing(parser, 0, "bc");
+}
