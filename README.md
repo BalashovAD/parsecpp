@@ -75,7 +75,7 @@ Use `lazy`, `lazyCached`, `lazyForget` functions that will end the loop while bu
 Refer to `benchmark/lazyBenchmark.cpp` for more details.
 
 To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
-See `examples/calc`.
+See `examples/calc` for an example.
 
 #### Lazy
 The easiest way is to use the `lazy` function.
@@ -101,24 +101,37 @@ parser(example);
 
 #### LazyCached
 
-Make one instance of recursive parser in preparing time. It's a much faster way to make recursive parsers. 
-But result parser (`Parser'<T>`) must have no mutable states inside, captured non-unique variables, 
+Make one instance of recursive parser in preparing time. It's a much faster way to create recursive parsers.
+However, the resulting parser (`Parser'<T>`) must not have mutable states inside, captured non-unique variables, 
 and allow to be called recursively for one instance. 
-Also, because `LazyCached` type dependence on `Fn` that dependence on `Parser<T>`,
-the generator cannot use `decltype(auto)` for return type. So, usually, the generator should use `toCommonType` for type erasing.
+Also, because `LazyCached` type dependence on `Fn` which depends on `Parser<T>`,
+the generator cannot use `decltype(auto)` for the return type. 
+So, usually, the generator should use `toCommonType` for type erasing.
 
 #### LazyForget
 
 This is an alternate version of `lazyCached` without type erasing.
 `LazyForget` only depends on the parser result type and doesn't create a recursive type. 
-You need to specify return type manually with `decltype(X)`, where `X` is value in `return` with changed `lazyForget<R>(f)` to
-`std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
-This code may be slightly faster when `lazyCached`, but code looks harder to read and edit. 
+You need to specify return type manually with `decltype(X)`, 
+where `X` is value in `return` with changed `lazyForget<R>(f)` to `std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
+This code may be (need to check it) slightly faster when `lazyCached`, but code looks harder to read and edit. 
 
 #### LazyCtxBinding
 
-This is an alternate version of `lazyCached` that using context variable to determinate recursion.
+This is an alternate version of `lazyCached` that using context variable to determinate recursion. 
+This version of recursion methods also requests type erasing using `toCommonType`, 
+but don't have restrictions for capturing variables and values in parser. 
+`LazyCtxBinding` adds new context to parser that contains `LazyCtxBinding<T, ParserCtx, Tag>::LazyContext` by value. 
+If an original parser don't have another context, you can create recursion storage instance using `makeBindingCtx(parser)`, 
+and context like `auto ctx = parser.makeCtx(lazyBindingStorage);`   
 
+This is an alternative version of `lazyCached` that uses a context variable to determine recursion. 
+This version of recursion methods also requires type erasing, for example, using `toCommonType`, 
+but it doesn't have restrictions for capturing variables and values in the parser. 
+`LazyCtxBinding` adds a new context to the parser that contains `LazyCtxBinding<T, ParserCtx, Tag>::LazyContext` by value. 
+If the original parser doesn't have another context, 
+you can create a recursion storage instance using `makeBindingCtx(parser)`, 
+and a context like `auto ctx = parser.makeCtx(lazyBindingStorage);`.
 
 #### Tag in lazy*
 The `Tag` type must be unique for any difference captured parser of `lazyCached`, `lazyForget` function. 
@@ -184,19 +197,19 @@ void usingBracesCtx() {
 
 Benchmark results: 
 
-| *                            | BM_bracesSuccess   | BM_bracesFailure   | Speedup   |
-|------------------------------|--------------------|--------------------|-----------|
-| bracesLazy                   | 12277ns            | 11963ns            | 0.37x     |
-| bracesCached                 | 4604ns             | 4349ns             | 1.0x      |
-| bracesCacheConstexpr         | 4813ns             | 4349ns             | 0.96x     |
-| bracesCtx                    | 4844ns             | 4332ns             | 0.95x     |
-| bracesCtxConstexpr           | 4656ns             | 4238ns             | 0.99x     |
-| bracesForget                 | 4973ns             | 4450ns             | 0.93x     |
-| ---------------------------- | ------------------ | ------------------ | --------- |
-| bracesCachedDrop             | 1025ns             | 1015ns             | 4.49x     |
-| bracesCacheDropConstexpr     | 1050ns             | 977ns              | 4.38x     |
-| bracesCtxDrop                | 1025ns             | 900ns              | 4.49x     |
-| bracesCtxDropConstexpr       | 1004ns             | 916ns              | 4.58x     |
+| *                          | Success   | Failure   | Speedup   |
+|----------------------------|-----------|-----------|-----------|
+| bracesLazy                 | 4667ns    | 4451ns    | 0.56x     |
+| bracesCached               | 2599ns    | 2447ns    | 1.0x      |
+| bracesCacheConstexpr       | 2692ns    | 2535ns    | 0.97x     |
+| bracesForget               | 2745ns    | 2591ns    | 0.95x     |
+| bracesCtx                  | 2622ns    | 2495ns    | 0.99x     |
+| bracesCtxConstexpr         | 2647ns    | 2523ns    | 0.98x     |
+| -------------------------- | --------- | --------- | --------- |
+| bracesCachedDrop           | 1987ns    | 1904ns    | 1.31x     |
+| bracesCacheDropConstexpr   | 1618ns    | 1501ns    | 1.61x     |
+| bracesCtxDrop              | 1952ns    | 1856ns    | 1.33x     |
+| bracesCtxDropConstexpr     | 1601ns    | 1511ns    | 1.62x     |
 
 
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
