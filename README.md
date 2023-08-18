@@ -182,6 +182,23 @@ void usingBracesCtx() {
 }
 ```
 
+Benchmark results: 
+
+| *                            | BM_bracesSuccess   | BM_bracesFailure   | Speedup   |
+|------------------------------|--------------------|--------------------|-----------|
+| bracesLazy                   | 12277ns            | 11963ns            | 0.37x     |
+| bracesCached                 | 4604ns             | 4349ns             | 1.0x      |
+| bracesCacheConstexpr         | 4813ns             | 4349ns             | 0.96x     |
+| bracesCtx                    | 4844ns             | 4332ns             | 0.95x     |
+| bracesCtxConstexpr           | 4656ns             | 4238ns             | 0.99x     |
+| bracesForget                 | 4973ns             | 4450ns             | 0.93x     |
+| ---------------------------- | ------------------ | ------------------ | --------- |
+| bracesCachedDrop             | 1025ns             | 1015ns             | 4.49x     |
+| bracesCacheDropConstexpr     | 1050ns             | 977ns              | 4.38x     |
+| bracesCtxDrop                | 1025ns             | 900ns              | 4.49x     |
+| bracesCtxDropConstexpr       | 1004ns             | 916ns              | 4.58x     |
+
+
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
 
 ## Build-in operators

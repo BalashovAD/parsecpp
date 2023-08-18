@@ -151,17 +151,17 @@ BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtxDropConstexpr, bracesCtxDropCons
 BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtxConstexpr, bracesCtxConstexpr());
 #endif
 
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesLazyF, bracesLazy().endOfStream());
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedF, bracesCache().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesLazy, bracesLazy().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesCached, bracesCache().endOfStream());
 #ifdef ENABLE_HARD_BENCHMARK
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedDropF, bracesCacheDrop().endOfStream());
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesCacheDropConstexprF, bracesCacheDropConstexpr().endOfStream());
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesCacheConstexprF, bracesCacheConstexpr().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedDrop, bracesCacheDrop().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesCacheDropConstexpr, bracesCacheDropConstexpr().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesCacheConstexpr, bracesCacheConstexpr().endOfStream());
 #endif
-BENCHMARK_CAPTURE(BM_bracesFailure, bracesForgetF, bracesForget().endOfStream());
-BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxF, bracesCtx());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesForget, bracesForget().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtx, bracesCtx());
 #ifdef ENABLE_HARD_BENCHMARK
-BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxDropF, bracesCtxDrop());
-BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxDropConstexprF, bracesCtxDropConstexpr());
-BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxConstexprF, bracesCtxConstexpr());
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxDrop, bracesCtxDrop());
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxDropConstexpr, bracesCtxDropConstexpr());
+BENCHMARK_CAPTURE(BM_bracesFailureCtx, bracesCtxConstexpr, bracesCtxConstexpr());
 #endif
