@@ -211,6 +211,16 @@ Benchmark results:
 | bracesCtxDrop              | 1952ns    | 1856ns    | 1.33x     |
 | bracesCtxDropConstexpr     | 1601ns    | 1511ns    | 1.62x     |
 
+```
+AMD Ryzen 7 5700U, linux gcc 12.3.0 compiler, clang 15.0.7 linker
+100 repetitions, median value, no-drop cv < 1.7%, drop cv < 0.7%
+Run on (16 X 4369.92 MHz CPU s)
+CPU Caches:
+  L1 Data 32 KiB (x8)
+  L1 Instruction 32 KiB (x8)
+  L2 Unified 512 KiB (x8)
+  L3 Unified 4096 KiB (x2)
+```
 
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
 
