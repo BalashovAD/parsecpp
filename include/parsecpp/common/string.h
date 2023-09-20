@@ -323,6 +323,16 @@ auto until() noexcept {
 }
 
 
+template <typename StringType = std::string_view>
+auto untilEnd() noexcept {
+    return Parser<StringType>::make([](Stream& stream) {
+        auto out = stream.sv();
+        stream.moveUnsafe(out.size());
+        return Parser<StringType>::data(StringType{out});
+    });
+}
+
+
 inline auto nextLine() noexcept {
     return Parser<Unit>::make([](Stream& stream) {
         auto sv = stream.sv();
