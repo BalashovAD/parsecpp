@@ -809,6 +809,9 @@ namespace prs {
 
 class Stream {
 public:
+    static constexpr auto CHAR_MAPPING_SIZE = std::numeric_limits<unsigned char>::max() + 1;
+    static_assert(CHAR_MAPPING_SIZE == 256);
+
     explicit Stream(std::string const& str) noexcept
         : Stream{str, str} {
 
@@ -886,6 +889,20 @@ public:
         } else {
             char c = m_currentStr[0];
             if (test == c) {
+                m_currentStr.remove_prefix(1);
+                return c;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    char checkFirst(std::array<bool, CHAR_MAPPING_SIZE> const& test) noexcept {
+        if (eos()) {
+            return 0;
+        } else {
+            char c = m_currentStr[0];
+            if (test[c]) {
                 m_currentStr.remove_prefix(1);
                 return c;
             } else {
@@ -1193,7 +1210,45 @@ public:
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
         return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
-           return lhs.apply(stream, ctx).map(fn);
+            return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+    template <std::invocable<T> ListFn>
+    constexpr auto fmap(ListFn &&fn) const noexcept {
+        return *this >>= std::forward<ListFn>(fn);
+    }
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A> -> (A -> Parser<B>) -> Parser<B>
+     */
+    template <typename ListFn>
+        requires(nocontext && IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs = *this, fn](Stream& stream) {
+           return lhs.apply(stream).flatMap([&](T &&t) {
+               return fn(t).apply(stream);
+           });
+        });
+    }
+
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A, CtxA> -> (A -> Parser<B, CtxB>) -> Parser<B, CtxA & CtxB>
+     */
+    template <typename ListFn>
+        requires(!nocontext || !IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        using UCtx = UnionCtx<Ctx, GetParserCtx<std::invoke_result_t<ListFn, T>>>;
+
+        return Parser<ResultT, UCtx>::make([lhs = *this, fn](Stream& stream, UCtx& ctx) {
+           return lhs.apply(stream, ctx).flatMap([&](T &&t) {
+               return fn(t).apply(stream, ctx);
+           });
         });
     }
 
@@ -2036,6 +2091,10 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 }
 
 
+/*
+ * Applicative
+ * liftM :: (A1 -> ... -> An -> B) -> Parser<A> -> ... -> Parser<An> -> Parser<B>
+ */
 template <typename Fn, ParserType ...Args>
     requires(!IsVoidCtx<GetContextTrait<Fn>> || (!IsVoidCtx<GetParserCtx<Args>> || ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
@@ -2050,13 +2109,21 @@ auto concat(Args &&...args) noexcept {
     return liftM(details::MakeTuple{}, std::forward<Args>(args)...);
 }
 
+/*
+ * satisfy :: (char -> bool) -> Parser<char>
+ */
 template <typename Fn>
 constexpr auto satisfy(Fn&& tTest) noexcept {
     return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
-        if (auto c = stream.checkFirst(test); c != 0) {
+        if (stream.eos()) {
+            return Parser<char>::PRS_MAKE_ERROR("satisfy eos", stream.pos());
+        }
+        char c = stream.front();
+        if (test(c)) {
+            stream.moveUnsafe();
             return Parser<char>::data(c);
         } else {
-            return Parser<char>::PRS_MAKE_ERROR("satisfy", stream.pos());
+            return Parser<char>::PRS_MAKE_ERROR("satisfy eq", stream.pos());
         }
     });
 }
@@ -2535,6 +2602,25 @@ inline auto spacesFast() noexcept {
 }
 
 
+namespace details {
+
+
+template <bool allowDigit>
+constexpr std::array<bool, Stream::CHAR_MAPPING_SIZE> lettersArrayGen() {
+    std::array<bool, 256> t{false};
+    for (int c = 0; c != Stream::CHAR_MAPPING_SIZE; ++c) {
+        if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (allowDigit && ('0' <= c && c <= '9'))) {
+            t[c] = true;
+        }
+    }
+    return t;
+}
+
+template <bool allowDigit>
+static constexpr std::array<bool, Stream::CHAR_MAPPING_SIZE> lettersArray = lettersArrayGen<allowDigit>();
+
+}
+
 /**
  *
  * @return Parser<StringType>
@@ -2543,9 +2629,8 @@ template <bool allowDigit = false, typename StringType = std::string_view>
 auto letters() noexcept {
     return make_parser([](Stream& str) {
         auto start = str.pos();
-        while (str.checkFirst([](char c) {
-            return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (allowDigit && ('0' <= c && c <= '9'));
-        }));
+
+        while (str.checkFirst(details::lettersArray<allowDigit>));
 
         auto end = str.pos();
         if (start == end) {
@@ -2840,7 +2925,7 @@ template <typename StringType = std::string_view>
 auto literal(std::string str) noexcept {
     return Parser<StringType>::make([str](Stream& s) {
         if (s.sv().starts_with(str)) {
-            s.move(str.size());
+            s.moveUnsafe(str.size());
             return Parser<StringType>::data(StringType{str});
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
@@ -2853,7 +2938,7 @@ auto literal() noexcept {
     using StringType = std::string_view;
     return Parser<StringType>::make([](Stream& s) {
         if (s.sv().starts_with(str.sv())) {
-            s.move(str.size());
+            s.moveUnsafe(str.size());
             return Parser<StringType>::data(str.sv());
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());

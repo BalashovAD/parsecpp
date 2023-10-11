@@ -14,6 +14,9 @@ namespace prs {
 
 class Stream {
 public:
+    static constexpr auto CHAR_MAPPING_SIZE = std::numeric_limits<unsigned char>::max() + 1;
+    static_assert(CHAR_MAPPING_SIZE == 256);
+
     explicit Stream(std::string const& str) noexcept
         : Stream{str, str} {
 
@@ -91,6 +94,20 @@ public:
         } else {
             char c = m_currentStr[0];
             if (test == c) {
+                m_currentStr.remove_prefix(1);
+                return c;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    char checkFirst(std::array<bool, CHAR_MAPPING_SIZE> const& test) noexcept {
+        if (eos()) {
+            return 0;
+        } else {
+            char c = m_currentStr[0];
+            if (test[c]) {
                 m_currentStr.remove_prefix(1);
                 return c;
             } else {

@@ -7,6 +7,7 @@ option(Parsecpp_DisableError   "Disable error" OFF)
 option(Parsecpp_EnableHardBenchmark   "Enable hard benchmark" OFF)
 option(Parsecpp_Sanitizer   "Enable sanitizer" OFF)
 option(Parsecpp_SingleInclude   "Use single include file" OFF)
+option(Parsecpp_AnnotateAssembler   "Annotate assembler -g3" OFF)
 
 if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
@@ -15,6 +16,12 @@ if(CCACHE_FOUND)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -fcolor-diagnostics")
     endif()
 endif(CCACHE_FOUND)
+
+
+if (Parsecpp_AnnotateAssembler)
+    message("Use -g3 to annotate assembler")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3")
+endif ()
 
 if (Parsecpp_SingleInclude)
     message("Use single_include")

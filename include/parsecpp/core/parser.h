@@ -167,7 +167,45 @@ public:
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
         return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
-           return lhs.apply(stream, ctx).map(fn);
+            return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+    template <std::invocable<T> ListFn>
+    constexpr auto fmap(ListFn &&fn) const noexcept {
+        return *this >>= std::forward<ListFn>(fn);
+    }
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A> -> (A -> Parser<B>) -> Parser<B>
+     */
+    template <typename ListFn>
+        requires(nocontext && IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs = *this, fn](Stream& stream) {
+           return lhs.apply(stream).flatMap([&](T &&t) {
+               return fn(t).apply(stream);
+           });
+        });
+    }
+
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A, CtxA> -> (A -> Parser<B, CtxB>) -> Parser<B, CtxA & CtxB>
+     */
+    template <typename ListFn>
+        requires(!nocontext || !IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        using UCtx = UnionCtx<Ctx, GetParserCtx<std::invoke_result_t<ListFn, T>>>;
+
+        return Parser<ResultT, UCtx>::make([lhs = *this, fn](Stream& stream, UCtx& ctx) {
+           return lhs.apply(stream, ctx).flatMap([&](T &&t) {
+               return fn(t).apply(stream, ctx);
+           });
         });
     }
 

@@ -61,6 +61,10 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 }
 
 
+/*
+ * Applicative
+ * liftM :: (A1 -> ... -> An -> B) -> Parser<A> -> ... -> Parser<An> -> Parser<B>
+ */
 template <typename Fn, ParserType ...Args>
     requires(!IsVoidCtx<GetContextTrait<Fn>> || (!IsVoidCtx<GetParserCtx<Args>> || ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
@@ -75,13 +79,21 @@ auto concat(Args &&...args) noexcept {
     return liftM(details::MakeTuple{}, std::forward<Args>(args)...);
 }
 
+/*
+ * satisfy :: (char -> bool) -> Parser<char>
+ */
 template <typename Fn>
 constexpr auto satisfy(Fn&& tTest) noexcept {
     return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
-        if (auto c = stream.checkFirst(test); c != 0) {
+        if (stream.eos()) {
+            return Parser<char>::PRS_MAKE_ERROR("satisfy eos", stream.pos());
+        }
+        char c = stream.front();
+        if (test(c)) {
+            stream.moveUnsafe();
             return Parser<char>::data(c);
         } else {
-            return Parser<char>::PRS_MAKE_ERROR("satisfy", stream.pos());
+            return Parser<char>::PRS_MAKE_ERROR("satisfy eq", stream.pos());
         }
     });
 }
