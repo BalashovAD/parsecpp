@@ -218,7 +218,7 @@ public:
     constexpr auto operator|(Parser<T, CtxB, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) noexcept(Parser<T, CtxB, Rhs>::nothrow) {
                 stream.restorePos(backup);
                 return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
@@ -321,7 +321,7 @@ public:
     constexpr auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>, Ctx>;
-        return P::make([value = *this](Stream& stream, auto& ctx) {
+        return P::make([value = *this](Stream& stream, auto& ctx) noexcept(nothrow) {
             std::vector<Value> out{};
             out.reserve(reserve);
 

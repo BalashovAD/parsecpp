@@ -1,6 +1,6 @@
 #include <benchmark/benchmark.h>
 
-#include <parsecpp/all.hpp>
+#include <parsecpp/full.hpp>
 
 #include "benchmarkHelper.hpp"
 
@@ -23,6 +23,24 @@ auto bindTag() {
     auto oneTag = tagParser.bind(closeTagGen);
 
     return (searchText<true>("<") >> oneTag).repeat<30>();;
+}
+
+auto bindCacheTag() {
+    using sv = std::string_view;
+
+    auto tagParser = charFrom<'<'>() >> until<'>'>() << charFrom<'>'>();
+    auto closeTagGen = staticCacher<sv>([](sv tagName) {
+        std::string closeTag;
+        closeTag.reserve(2 + tagName.size() + 2);
+        closeTag += "</";
+        closeTag.append(tagName.data(), tagName.size());
+        closeTag += '>';
+        return concat(pure(tagName), until<'<'>() << literal(closeTag));
+    });
+
+    auto oneTag = tagParser.bind(closeTagGen);
+
+    return (searchText<true>("<") >> oneTag).repeat<30>();
 }
 
 auto cmpTag() {
@@ -55,5 +73,6 @@ void BM_TagParser(benchmark::State& state, P parser, std::string const& filename
     state.SetBytesProcessed(test.size() * state.iterations());
 }
 
-//BENCHMARK_CAPTURE(BM_TagParser, Bind, bindTag(), "./tags.txt");
-//BENCHMARK_CAPTURE(BM_TagParser, Cmp, cmpTag(), "./tags.txt");
+BENCHMARK_CAPTURE(BM_TagParser, Bind, bindTag(), "./tags.txt");
+BENCHMARK_CAPTURE(BM_TagParser, BindCache, bindCacheTag(), "./tags.txt");
+BENCHMARK_CAPTURE(BM_TagParser, Cmp, cmpTag(), "./tags.txt");

@@ -195,7 +195,7 @@ auto searchText(std::string const& searchPattern) noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -214,7 +214,7 @@ auto searchText() noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
