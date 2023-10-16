@@ -2,7 +2,7 @@
 
 
 TEST(StaticCacher, CommonInt) {
-    auto cacher = staticCacher<int>([](int a) {
+    auto cacher = makeMapCacher<int>([](int a) {
         return a + 1;
     });
 
@@ -26,7 +26,7 @@ struct CtrCounter {
 };
 
 TEST(StaticCacher, CtrCounter) {
-    auto cacher = staticCacher<char>(details::MakeClass<CtrCounter>{});
+    auto cacher = makeTCacher<details::HashMapStorage, char>(details::MakeClass<CtrCounter>{});
 
     CtrCounter::i = 0;
     EXPECT_EQ(CtrCounter::i, 0);
@@ -41,7 +41,7 @@ TEST(StaticCacher, CtrCounter) {
 
 TEST(StaticCacher, MultiArguments) {
     int counter = 0;
-    auto cacher = staticCacher<int, int>([&](int a, int b) {
+    auto cacher = makeTCacher<details::VectorStorage, int, int>([&](int a, int b) {
         ++counter;
         return a + b;
     });
