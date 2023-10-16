@@ -8,13 +8,14 @@
 #include <utility>
 #include <sstream>
 #include <cassert>
+#include <numeric>
 
 
 namespace prs {
 
 class Stream {
 public:
-    static constexpr auto CHAR_MAPPING_SIZE = std::numeric_limits<unsigned char>::max() + 1;
+    static constexpr auto CHAR_MAPPING_SIZE = size_t(1) + std::numeric_limits<unsigned char>::max();
     static_assert(CHAR_MAPPING_SIZE == 256);
 
     explicit Stream(std::string const& str) noexcept

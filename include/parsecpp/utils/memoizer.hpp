@@ -80,9 +80,9 @@ private:
 }
 
 template <typename Out, typename Key, typename Fn, typename StorageT>
-class StaticCacher {
+class Memoizer {
 public:
-    explicit StaticCacher(Fn fn)
+    explicit Memoizer(Fn fn)
         : m_fn(std::move(fn)) {
 
     }
@@ -132,18 +132,18 @@ using getFirst = typename GetFirst<Args...>::type;
 
 
 template <typename ...Args, typename Fn>
-auto makeMapCacher(Fn fn) {
+auto makeMapMemoizer(Fn fn) {
     using Out = std::invoke_result_t<Fn, Args...>;
     using Key = std::conditional_t<sizeof...(Args) == 1, details::getFirst<Args...>, std::tuple<Args...>>;
-    return StaticCacher<Out, Key, std::remove_cv_t<Fn>, details::MapStorage<Key, Out>>{std::move(fn)};
+    return Memoizer<Out, Key, std::remove_cv_t<Fn>, details::MapStorage<Key, Out>>{std::move(fn)};
 }
 
 
 template <template<typename K, typename V> typename Storage, typename ...Args, typename Fn>
-auto makeTCacher(Fn fn) {
+auto makeTMemoizer(Fn fn) {
     using Out = std::invoke_result_t<Fn, Args...>;
     using Key = std::conditional_t<sizeof...(Args) == 1, details::getFirst<Args...>, std::tuple<Args...>>;
-    return StaticCacher<Out, Key, std::remove_cv_t<Fn>, Storage<Key, Out>>{std::move(fn)};
+    return Memoizer<Out, Key, std::remove_cv_t<Fn>, Storage<Key, Out>>{std::move(fn)};
 }
 
 }

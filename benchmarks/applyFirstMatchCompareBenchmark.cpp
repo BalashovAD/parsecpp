@@ -362,11 +362,11 @@ BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyMap ## n ## Random, map ## 
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyUMap ## n ## Random, umap ## n, challengeR ## n, n);\
 
 #ifdef ENABLE_HARD_BENCHMARK
-GEN_TEST_FOR(4);
-GEN_TEST_FOR(7);
-GEN_TEST_FOR(12);
-GEN_TEST_FOR(18);
-GEN_TEST_FOR(23);
+GEN_TEST_FOR(4)
+GEN_TEST_FOR(7)
+GEN_TEST_FOR(12)
+GEN_TEST_FOR(18)
+GEN_TEST_FOR(23)
 #else
-GEN_TEST_FOR(12);
+GEN_TEST_FOR(12)
 #endif

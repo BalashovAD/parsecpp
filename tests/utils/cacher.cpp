@@ -1,8 +1,8 @@
 #include "../testHelper.h"
 
 
-TEST(StaticCacher, CommonInt) {
-    auto cacher = makeMapCacher<int>([](int a) {
+TEST(Memoizer, CommonInt) {
+    auto cacher = makeMapMemoizer<int>([](int a) {
         return a + 1;
     });
 
@@ -25,8 +25,8 @@ struct CtrCounter {
     char cc;
 };
 
-TEST(StaticCacher, CtrCounter) {
-    auto cacher = makeTCacher<details::HashMapStorage, char>(details::MakeClass<CtrCounter>{});
+TEST(Memoizer, CtrCounter) {
+    auto cacher = makeTMemoizer<details::HashMapStorage, char>(details::MakeClass<CtrCounter>{});
 
     CtrCounter::i = 0;
     EXPECT_EQ(CtrCounter::i, 0);
@@ -39,9 +39,9 @@ TEST(StaticCacher, CtrCounter) {
     CtrCounter::i = 0;
 }
 
-TEST(StaticCacher, MultiArguments) {
+TEST(Memoizer, MultiArguments) {
     int counter = 0;
-    auto cacher = makeTCacher<details::VectorStorage, int, int>([&](int a, int b) {
+    auto cacher = makeTMemoizer<details::VectorStorage, int, int>([&](int a, int b) {
         ++counter;
         return a + b;
     });

@@ -21,13 +21,13 @@ auto bindTag() {
 
     auto oneTag = tagParser.bind(closeTagGen);
 
-    return (searchText<true>("<") >> oneTag).repeat<30>();;
+    return (searchText<true>("<") >> oneTag).repeat<30>();
 }
 
 template <template<typename,typename> typename Storage>
 auto bindCacheTag() {
     auto tagParser = charFrom<'<'>() >> until<'>'>() << charFrom<'>'>();
-    auto closeTagGen = makeTCacher<Storage, sv>([](sv tagName) {
+    auto closeTagGen = makeTMemoizer<Storage, sv>([](sv tagName) {
         std::string closeTag;
         closeTag.reserve(2 + tagName.size() + 2);
         closeTag += "</";
