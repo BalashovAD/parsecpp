@@ -88,7 +88,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 template <typename T, typename K>
@@ -113,7 +113,7 @@ public:
         return m_value;
     }
 private:
-    T& m_value;
+    [[no_unique_address]] T& m_value;
 };
 
 
@@ -135,7 +135,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 
@@ -157,7 +157,7 @@ public:
         return m_value;
     }
 private:
-    T const& m_value;
+    [[no_unique_address]] T const& m_value;
 };
 
 

@@ -89,7 +89,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 template <typename T, typename K>
@@ -114,7 +114,7 @@ public:
         return m_value;
     }
 private:
-    T& m_value;
+    [[no_unique_address]] T& m_value;
 };
 
 
@@ -136,7 +136,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 
@@ -158,7 +158,7 @@ public:
         return m_value;
     }
 private:
-    T const& m_value;
+    [[no_unique_address]] T const& m_value;
 };
 
 
@@ -804,13 +804,14 @@ private:
 #include <utility>
 #include <sstream>
 #include <cassert>
+#include <numeric>
 
 
 namespace prs {
 
 class Stream {
 public:
-    static constexpr auto CHAR_MAPPING_SIZE = std::numeric_limits<unsigned char>::max() + 1;
+    static constexpr auto CHAR_MAPPING_SIZE = size_t(1) + std::numeric_limits<unsigned char>::max();
     static_assert(CHAR_MAPPING_SIZE == 256);
 
     explicit Stream(std::string const& str) noexcept
@@ -1262,7 +1263,7 @@ public:
     constexpr auto operator|(Parser<T, CtxB, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) noexcept(Parser<T, CtxB, Rhs>::nothrow) {
                 stream.restorePos(backup);
                 return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
@@ -1365,7 +1366,7 @@ public:
     constexpr auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>, Ctx>;
-        return P::make([value = *this](Stream& stream, auto& ctx) {
+        return P::make([value = *this](Stream& stream, auto& ctx) noexcept(nothrow) {
             std::vector<Value> out{};
             out.reserve(reserve);
 
@@ -2742,7 +2743,7 @@ auto searchText(std::string const& searchPattern) noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -2761,7 +2762,7 @@ auto searchText() noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -3180,7 +3181,7 @@ class Repeat {
 public:
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream, Ctx& ctx) {
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) const {
         using P = Parser<typename std::decay_t<decltype(parser)>::Type, Ctx>;
 
         get().init();
@@ -3492,6 +3493,156 @@ private:
 
 template <typename Fn>
 Finally(Fn) -> Finally<std::decay_t<Fn>>;
+
+}
+// #include <parsecpp/utils/memoizer.hpp>
+
+
+namespace prs {
+
+namespace details {
+
+
+template <typename K, typename V>
+class MapStorage {
+public:
+    MapStorage() = default;
+
+    using Pointer = V const*;
+    Pointer find(K const& key) const noexcept {
+        if (auto it = m_storage.find(key); it != m_storage.end()) {
+            return std::addressof(it->second);
+        } else {
+            return nullptr;
+        }
+    }
+
+    V const& emplace(K const& k, V &&v) {
+        return m_storage.emplace(k, v).first->second;
+    }
+private:
+    std::map<K, V> m_storage;
+};
+
+template <typename K, typename V>
+class HashMapStorage {
+public:
+    HashMapStorage() = default;
+
+    using Pointer = V*;
+    Pointer find(K const& key) noexcept {
+        if (auto it = m_storage.find(key); it != m_storage.end()) {
+            return std::addressof(it->second);
+        } else {
+            return nullptr;
+        }
+    }
+
+    V const& emplace(K const& k, V &&v) {
+        return m_storage.emplace(k, v).first->second;
+    }
+private:
+    std::unordered_map<K, V> m_storage;
+};
+
+
+template <typename K, typename V>
+class VectorStorage {
+public:
+    static constexpr size_t EXPECTED_MAX_ELEMENTS = 10;
+
+    VectorStorage() {
+        m_storage.reserve(EXPECTED_MAX_ELEMENTS);
+    }
+
+    using Pointer = V const*;
+    Pointer find(K const& key) const noexcept {
+        for (auto const& st : m_storage) {
+            if (st.first == key) {
+                return std::addressof(st.second);
+            }
+        }
+        return nullptr;
+    }
+
+    V const& emplace(K const& k, V &&v) {
+        assert(!find(k));
+
+        return m_storage.emplace_back(std::pair<K, V>(k, v)).second;
+    }
+private:
+    std::vector<std::pair<K, V>> m_storage;
+};
+
+
+}
+
+template <typename Out, typename Key, typename Fn, typename StorageT>
+class Memoizer {
+public:
+    explicit Memoizer(Fn fn)
+        : m_fn(std::move(fn)) {
+
+    }
+
+    template <typename ...Args>
+        requires(sizeof...(Args) > 1)
+    Out const& operator()(Args const& ...args) const {
+        auto key = std::make_tuple(args...);
+        if (auto it = m_storage.find(key); it) {
+            return *it;
+        } else {
+            return m_storage.emplace(key, m_fn(args...));
+        }
+    }
+
+
+    Out const& operator()(Key const& key) const {
+        if (auto it = m_storage.find(key); it) {
+            return *it;
+        } else {
+            return m_storage.emplace(key, m_fn(key));
+        }
+    }
+private:
+    mutable StorageT m_storage;
+    Fn m_fn;
+};
+
+namespace details {
+
+template <typename A, typename ...Args>
+struct GetFirst {
+    using type = A;
+};
+
+template <typename ...Args>
+using getFirst = typename GetFirst<Args...>::type;
+
+/*
+ * template <typename A, typename ...>
+ * using getFirst = A;
+ * Compile error: pack expansion argument for non-pack parameter
+ * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=59498
+ */
+
+}
+
+
+template <typename ...Args, typename Fn>
+auto makeMapMemoizer(Fn fn) {
+    using Out = std::invoke_result_t<Fn, Args...>;
+    using Key = std::conditional_t<sizeof...(Args) == 1, details::getFirst<Args...>, std::tuple<Args...>>;
+    return Memoizer<Out, Key, std::remove_cv_t<Fn>, details::MapStorage<Key, Out>>{std::move(fn)};
+}
+
+
+template <template<typename K, typename V> typename Storage, typename ...Args, typename Fn>
+auto makeTMemoizer(Fn fn) {
+    using Out = std::invoke_result_t<Fn, Args...>;
+    using Key = std::conditional_t<sizeof...(Args) == 1, details::getFirst<Args...>, std::tuple<Args...>>;
+    return Memoizer<Out, Key, std::remove_cv_t<Fn>, Storage<Key, Out>>{std::move(fn)};
+}
 
 }
 
