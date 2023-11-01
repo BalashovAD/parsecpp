@@ -88,7 +88,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 template <typename T, typename K>
@@ -113,7 +113,7 @@ public:
         return m_value;
     }
 private:
-    T& m_value;
+    [[no_unique_address]] T& m_value;
 };
 
 
@@ -135,7 +135,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 
@@ -157,7 +157,7 @@ public:
         return m_value;
     }
 private:
-    T const& m_value;
+    [[no_unique_address]] T const& m_value;
 };
 
 
@@ -803,13 +803,14 @@ private:
 #include <utility>
 #include <sstream>
 #include <cassert>
+#include <numeric>
 
 
 namespace prs {
 
 class Stream {
 public:
-    static constexpr auto CHAR_MAPPING_SIZE = std::numeric_limits<unsigned char>::max() + 1;
+    static constexpr auto CHAR_MAPPING_SIZE = size_t(1) + std::numeric_limits<unsigned char>::max();
     static_assert(CHAR_MAPPING_SIZE == 256);
 
     explicit Stream(std::string const& str) noexcept
@@ -1261,7 +1262,7 @@ public:
     constexpr auto operator|(Parser<T, CtxB, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) noexcept(Parser<T, CtxB, Rhs>::nothrow) {
                 stream.restorePos(backup);
                 return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
@@ -1364,7 +1365,7 @@ public:
     constexpr auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>, Ctx>;
-        return P::make([value = *this](Stream& stream, auto& ctx) {
+        return P::make([value = *this](Stream& stream, auto& ctx) noexcept(nothrow) {
             std::vector<Value> out{};
             out.reserve(reserve);
 
@@ -2741,7 +2742,7 @@ auto searchText(std::string const& searchPattern) noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -2760,7 +2761,7 @@ auto searchText() noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -3179,7 +3180,7 @@ class Repeat {
 public:
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream, Ctx& ctx) {
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) const {
         using P = Parser<typename std::decay_t<decltype(parser)>::Type, Ctx>;
 
         get().init();
