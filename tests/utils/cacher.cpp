@@ -18,7 +18,7 @@ struct CtrCounter {
         ++i;
     }
 
-    bool operator==(CtrCounter rhs) {
+    bool operator==(CtrCounter const& rhs) const {
         return rhs.cc == cc;
     }
 

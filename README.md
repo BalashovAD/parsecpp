@@ -425,7 +425,7 @@ s == "ZAQ";
 ### Debug
 For debug purpose use namespace `debug::`, see `parsecpp/common/debug.h` and `tests/common/debugTest.cpp`.
 
-```
+```c++
 debug::DebugContext debugContext;
 auto parser = spaces() >> debug::parserWork(number<int>(), "Int") << spaces();
 parser(steam, debugContext);

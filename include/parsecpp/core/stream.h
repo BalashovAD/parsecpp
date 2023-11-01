@@ -131,7 +131,7 @@ public:
         std::ostringstream stream;
         stream << "Parse error in pos: " << error.pos;
         if constexpr (!DISABLE_ERROR_LOG) {
-            stream << ", dsc: " << error.description;
+            stream << ", dsc: " << error.getDescription();
         }
         if constexpr (printAfter + printBefore > 0) {
             auto startPos = error.pos > printBefore ? error.pos - printBefore : 0;

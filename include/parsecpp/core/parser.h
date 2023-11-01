@@ -613,21 +613,12 @@ public:
     }
 
     static constexpr Result makeError(size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{pos}};
     }
 
-#ifdef PRS_DISABLE_ERROR_LOG
     static constexpr Result makeError(std::string_view desc, size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{desc, pos}};
     }
-#else
-    static constexpr Result makeError(
-            std::string desc,
-            size_t pos,
-            details::SourceLocation source = details::SourceLocation::current()) noexcept {
-        return Result{details::ParsingError{std::move(desc), pos}};
-    }
-#endif
 
     template <typename U = T>
         requires(std::convertible_to<U, T>)
