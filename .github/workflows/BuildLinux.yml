@@ -60,7 +60,7 @@ jobs:
       run: echo '${{env.JSON_EXAMPLE}}' | ./json/json
 
     - name: Configure CMake Debug
-      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF
+      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF -DParsecpp_Sanitizer=ON
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build_debug --config Debug
@@ -72,3 +72,11 @@ jobs:
     - name: Example quick
       working-directory: ${{github.workspace}}/build_debug/examples
       run: ./quick/quick
+
+    - name: Example calc
+      working-directory: ${{github.workspace}}/build_debug/examples
+      run: echo '${{env.CALC_EXAMPLE}}' | ./calc/calc
+
+    - name: Example json
+      working-directory: ${{github.workspace}}/build_debug/examples
+      run: echo '${{env.JSON_EXAMPLE}}' | ./json/json

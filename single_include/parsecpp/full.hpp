@@ -339,10 +339,10 @@ static constexpr bool DISABLE_ERROR_LOG = false;
 #define PRS_MAKE_ERROR(strError, pos) makeError(strError, pos);
 #else
 static constexpr bool DISABLE_ERROR_LOG = true;
-#define PRS_MAKE_ERROR(strError, pos) makeError("", pos);
+#define PRS_MAKE_ERROR(strError, pos) makeError(pos);
 #endif
 
-static constexpr size_t MAX_ITERATION = 1000000;
+static constexpr size_t MAX_ITERATION = 1'000'000;
 
 }
 
@@ -350,11 +350,45 @@ static constexpr size_t MAX_ITERATION = 1000000;
 
 namespace prs::details {
 
-struct ParsingError {
+template <bool disableDescription>
+struct ParsingErrorT;
+
+template <>
+struct ParsingErrorT<false> {
+    ParsingErrorT() = default;
+
+    explicit ParsingErrorT(std::string_view s, size_t p) noexcept
+        : description(s), pos(p) {};
+
+    explicit ParsingErrorT(size_t p) noexcept
+        : pos(p) {};
+
+    std::string_view getDescription() const noexcept {
+        return description;
+    }
+
     std::string description;
     size_t pos{};
 };
 
+template <>
+struct ParsingErrorT<true> {
+    ParsingErrorT() = default;
+
+    explicit ParsingErrorT(std::string_view s, size_t p) noexcept
+        : pos(p) {};
+
+    explicit ParsingErrorT(size_t p) noexcept
+        : pos(p) {};
+
+    std::string_view getDescription() const noexcept {
+        return "";
+    }
+
+    size_t pos{};
+};
+
+using ParsingError = ParsingErrorT<DISABLE_ERROR_LOG>;
 
 }
 
@@ -518,25 +552,25 @@ public:
     static constexpr bool map_move_nothrow = std::is_nothrow_invocable_v<OnSuccess, T>
                     && std::is_nothrow_invocable_v<OnError, Error>;
 
-    constexpr explicit Expected(T &&t) noexcept
+    constexpr explicit Expected(T &&t) noexcept(std::is_nothrow_move_constructible_v<T>)
         : m_isError(false)
         , m_data(std::move(t)) {
 
     }
 
 
-    constexpr explicit Expected(T const& t) noexcept
+    constexpr explicit Expected(T const& t) noexcept(std::is_nothrow_copy_constructible_v<T>)
         : m_isError(false)
         , m_data(t) {
 
     }
 
-    constexpr explicit Expected(Error &&error) noexcept
+    constexpr explicit Expected(Error &&error) noexcept(std::is_nothrow_move_constructible_v<Error>)
         : m_isError(true)
         , m_error(std::move(error)) {
     }
 
-    constexpr explicit Expected(Error const& error) noexcept
+    constexpr explicit Expected(Error const& error) noexcept(std::is_nothrow_copy_constructible_v<Error>)
         : m_isError(true)
         , m_error(error) {
     }
@@ -553,9 +587,9 @@ public:
 
     ~Expected() noexcept {
         if (isError()) {
-            m_error.~Error();
+            std::destroy_at(&m_error);
         } else {
-            m_data.~T();
+            std::destroy_at(&m_data);
         }
     }
 
@@ -927,7 +961,7 @@ public:
         std::ostringstream stream;
         stream << "Parse error in pos: " << error.pos;
         if constexpr (!DISABLE_ERROR_LOG) {
-            stream << ", dsc: " << error.description;
+            stream << ", dsc: " << error.getDescription();
         }
         if constexpr (printAfter + printBefore > 0) {
             auto startPos = error.pos > printBefore ? error.pos - printBefore : 0;
@@ -1658,21 +1692,12 @@ public:
     }
 
     static constexpr Result makeError(size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{pos}};
     }
 
-#ifdef PRS_DISABLE_ERROR_LOG
     static constexpr Result makeError(std::string_view desc, size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{desc, pos}};
     }
-#else
-    static constexpr Result makeError(
-            std::string desc,
-            size_t pos,
-            details::SourceLocation source = details::SourceLocation::current()) noexcept {
-        return Result{details::ParsingError{std::move(desc), pos}};
-    }
-#endif
 
     template <typename U = T>
         requires(std::convertible_to<U, T>)
@@ -3793,7 +3818,8 @@ public:
             }
             return t;
         }, [&](auto &&error) {
-            ctx.get().addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
+            // append is used because operator+ doesn't work with string + string_view
+            ctx.get().addLog(stream.pos(), ("Error{" + m_parserName + "}: ").append(error.getDescription()));
             return error;
         });
     }
