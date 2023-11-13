@@ -2,7 +2,7 @@
 
 ![Build](https://github.com/balashovAD/parsecpp/actions/workflows/BuildLinux.yml/badge.svg)
 
-Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf).
+Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf) ([alt](https://drive.proton.me/urls/7DD4TQHFS8#Ao85HnCqn4OD)).
 
 ## TODO List
 - [x] Disable error log by flag
@@ -19,6 +19,7 @@ All quick examples are located in `examples/quickExamples`.
 
 ### Hello username
 ```c++
+// Parser<std::string_view>
 auto hello = literal("Hello") >> spaces() >> letters();
 
 Stream helloExample{"Hello username"};
@@ -42,11 +43,11 @@ public:
     Circle(Point center, double r);
 };
 
-// Parser<Point>
+// Parser<Point>: (%int%;%int%)
 auto pointParser = between('(', ')',
            liftM(details::MakeClass<Point>{}, number<int>(), charFrom(';') >> number<int>()));
 
-// Parser<Circle>
+// Parser<Circle>: Circle\s*%Point%\s*%double%
 auto parser = literal("Circle") >> spaces() >>
         liftM(details::MakeClass<Circle>{}, pointParser, spaces() >> number<double>());
 
@@ -54,175 +55,17 @@ Stream example{"Circle (1;-3) 4.5"};
 parser(example);
 ```
 
-
 ## Installation
 
 This header only library requires a c++20 compiler.  
-You can include this library as a git submodule in your project and add 
-`target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})` to your CMakeLists.txt file.
+You can include the library as a git submodule in your project and add 
+`target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})` to your `CMakeLists.txt` file.
 
 Alternatively, you can copy & paste the `single_include` headers to your project's include path.
 Use `all.hpp` as the base parser header, while `full.hpp` contains some extra options.
 
 There is also a configurable parameter, `Parsecpp_DisableError`, 
-that you can turn on to optimize error string. `-DParsecpp_DisableError=ON`
-This is recommended for release builds.
-
-### Recursion 
-`Parsecpp` is a top-down parser and doesn't like left recursion. 
-Furthermore, building your combinator parser with direct recursion would cause a stack overflow before parsing.  
-Use `lazy`, `lazyCached`, `lazyForget` functions that will end the loop while building.
-Refer to `benchmark/lazyBenchmark.cpp` for more details.
-
-To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
-See `examples/calc` for an example.
-
-#### Lazy
-The easiest way is to use the `lazy` function.
-It builds the combinator, but parser generator will only be called only while parsing the stream.
-It's slower than building full parser once before start and avoid type erasing.
-However, it's a universal method that works with any parsers.
-
-```c++
-Parser<char> makeB();
-
-auto makeA() {
-    return charFrom('A') >> makeB();
-}
-
-Parser<char> makeB() {
-    return (charFrom('B') | lazy(makeA)).toCommonType();
-}
-
-auto parser = makeA();
-Stream example("AAAAB");
-parser(example);
-```
-
-#### LazyCached
-
-Make one instance of recursive parser in preparing time. It's a much faster way to create recursive parsers.
-However, the resulting parser (`Parser'<T>`) must not have mutable states inside, captured non-unique variables, 
-and allow to be called recursively for one instance. 
-Also, because `LazyCached` type dependence on `Fn` which depends on `Parser<T>`,
-the generator cannot use `decltype(auto)` for the return type. 
-So, usually, the generator should use `toCommonType` for type erasing.
-
-#### LazyForget
-
-This is an alternate version of `lazyCached` without type erasing.
-`LazyForget` only depends on the parser result type and doesn't create a recursive type. 
-You need to specify return type manually with `decltype(X)`, 
-where `X` is value in `return` with changed `lazyForget<R>(f)` to `std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
-This code may be (need to check it) slightly faster when `lazyCached`, but code looks harder to read and edit. 
-
-#### LazyCtxBinding
-
-This is an alternate version of `lazyCached` that using context variable to determinate recursion. 
-This version of recursion methods also requests type erasing using `toCommonType`, 
-but don't have restrictions for capturing variables and values in parser. 
-`LazyCtxBinding` adds new context to parser that contains `LazyCtxBinding<T, ParserCtx, Tag>::LazyContext` by value. 
-If an original parser don't have another context, you can create recursion storage instance using `makeBindingCtx(parser)`, 
-and context like `auto ctx = parser.makeCtx(lazyBindingStorage);`   
-
-This is an alternative version of `lazyCached` that uses a context variable to determine recursion. 
-This version of recursion methods also requires type erasing, for example, using `toCommonType`, 
-but it doesn't have restrictions for capturing variables and values in the parser. 
-`LazyCtxBinding` adds a new context to the parser that contains `LazyCtxBinding<T, ParserCtx, Tag>::LazyContext` by value. 
-If the original parser doesn't have another context, 
-you can create a recursion storage instance using `makeBindingCtx(parser)`, 
-and a context like `auto ctx = parser.makeCtx(lazyBindingStorage);`.
-
-#### Tag in lazy*
-The `Tag` type must be unique for any difference captured parser of `lazyCached`, `lazyForget` function. 
-For cases where you call `lazyCached` only once per line, you can use the default tag `AutoTag`. 
-Use macros `AutoTagT` for unique type, `AutoTagV` for tag instance.  
-If you are unsure, specialize `Tag` type manually. Be careful with func helpers that cover the tag parameter.
-For example the following code won't work correctly:
-```c++
-// Doesn't work properly
-template <typename Fn>
-auto f(Fn f) {
-// use AutoTag with current line, but this code isn't unique for difference f with the same class Fn
-    return lazyCached<AutoTagT>(f) << spaces(); 
-}
-
-// Correct version
-template <typename Tag, typename Fn>
-auto f(Fn f) {
-// use AutoTag line of call f
-    return lazyCached<Tag>(f) << spaces();
-}
-```
-
-```c++
-// Fn ~ std::function<Parser'<T>(void)>
-
-template <typename Tag, std::invocable Fn>
-auto lazyCached(Fn const&) noexcept(Fn);
-```
-
-#### Compare lazy* functions
-
-```c++
-Parser<Unit> bracesLazy() noexcept {
-    return (concat(charFrom('(', '{', '['), lazy(bracesLazy) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat() >> success()).toCommonType();
-}
-
-Parser<Unit> bracesCache() noexcept {
-    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache, AutoTagM) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat() >> success()).toCommonType();
-}
-using ForgetTag = AutoTagT;
-auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit, ForgetTag>>>() >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat() >> success())) {
-
-    return (concat(charFrom('(', '{', '['), lazyForget<Unit, ForgetTag>(bracesForget) >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat() >> success());
-}
-
-auto bracesCtx() noexcept {
-    return (concat(charFrom('(', '{', '['), lazyCtxBinding<Unit>() >> charFrom(')', '}', ']'))
-        .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
-}
-
-void usingBracesCtx() {
-    auto parser = bracesCtx();
-    auto lazyBindingStorage = makeBindingCtx(baseParser);
-    auto ctx = parser.makeCtx(lazyBindingStorage);
-    parser(stream, ctx);
-}
-```
-
-Benchmark results: 
-
-| *                          | Success   | Failure   | Speedup   |
-|----------------------------|-----------|-----------|-----------|
-| bracesLazy                 | 4667ns    | 4451ns    | 0.56x     |
-| bracesCached               | 2599ns    | 2447ns    | 1.0x      |
-| bracesCacheConstexpr       | 2692ns    | 2535ns    | 0.97x     |
-| bracesForget               | 2745ns    | 2591ns    | 0.95x     |
-| bracesCtx                  | 2622ns    | 2495ns    | 0.99x     |
-| bracesCtxConstexpr         | 2647ns    | 2523ns    | 0.98x     |
-| -------------------------- | --------- | --------- | --------- |
-| bracesCachedDrop           | 1987ns    | 1904ns    | 1.31x     |
-| bracesCacheDropConstexpr   | 1618ns    | 1501ns    | 1.61x     |
-| bracesCtxDrop              | 1952ns    | 1856ns    | 1.33x     |
-| bracesCtxDropConstexpr     | 1601ns    | 1511ns    | 1.62x     |
-
-```
-AMD Ryzen 7 5700U, linux gcc 12.3.0 compiler, clang 15.0.7 linker
-100 repetitions, median value, no-drop cv < 1.7%, drop cv < 0.7%
-Run on (16 X 4369.92 MHz CPU s)
-CPU Caches:
-  L1 Data 32 KiB (x8)
-  L1 Instruction 32 KiB (x8)
-  L2 Unified 512 KiB (x8)
-  L3 Unified 4096 KiB (x2)
-```
-
-See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
+that you can turn on to optimize error string. `-DParsecpp_DisableError=ON` is recommended for release builds.
 
 ## Build-in operators
 
@@ -261,7 +104,8 @@ For example, see the `Debug` section and `debug::DebugContext`.
 
 Context type `CtxA & CtxB` is shorthand for `UnionCtx<CtxA, CtxB>`.
 Unlike the common `union`, `UnionCtx` depends on the argument sequence. 
-For example, `ContextWrapper<char, unsigned> := UnionCtx<char, unsigned> != UnionCtx<unsigned, char> =: ContextWrapper<unsigned, char>` 
+For example, `ContextWrapper<char, unsigned> := UnionCtx<char, unsigned> != UnionCtx<unsigned, char> =: ContextWrapper<unsigned, char>`.
+Also `CtxA & CtxA := CtxA`, `CtxA & VoidCtx = CtxA`, `VoidCtx & CtxA = CtxA`.
 
 ### Converting to a Common Type
 ```
@@ -374,6 +218,163 @@ auto parser = charFrom('a', 'b', 'c').drop().repeat(); // Parser<Drop>
 // this code doesn't need to allocate memory for std::vector and works much faster
 ```
 
+### Recursion
+`Parsecpp` is a top-down parser and doesn't like left recursion.
+Furthermore, building your combinator parser with direct recursion would cause a stack overflow before parsing.  
+Use `lazy`, `lazyCached`, `lazyForget`, `lazyCtxBinding` functions that will end the loop while building.
+Refer to `benchmark/lazyBenchmark.cpp` for more details.
+
+To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
+See `examples/calc` for an example.
+
+#### Lazy
+The easiest way is to use the `lazy` function.
+It builds the combinator, but parser generator will only be called only while parsing the stream.
+It's slower than building full parser once before start and avoid type erasing.
+However, it's a universal method that works with any parsers.
+
+```c++
+Parser<char> makeB();
+
+auto makeA() {
+    return charFrom('A') >> makeB();
+}
+
+Parser<char> makeB() {
+    return (charFrom('B') | lazy(makeA)).toCommonType();
+}
+
+auto parser = makeA();
+Stream example("AAAAB");
+parser(example);
+```
+
+#### LazyCached
+
+Make one instance of recursive parser in preparing time. It's a much faster way to create recursive parsers.
+However, the resulting parser (`Parser'<T>`) must not have mutable states inside, captured non-unique variables,
+and allow to be called recursively for one instance.
+Also, because `LazyCached` type dependence on `Fn` which depends on `Parser<T>`,
+the generator cannot use `decltype(auto)` for the return type.
+So, usually, the generator should use `toCommonType` for type erasing.
+
+#### LazyForget
+
+This is an alternate version of `lazyCached` without type erasing.
+`LazyForget` only depends on the parser result type and doesn't create a recursive type.
+You need to specify return type manually with `decltype(X)`,
+where `X` is value in `return` with changed `lazyForget<R>(f)` to `std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
+This code may be (need to check it) slightly faster when `lazyCached`, but code looks harder to read and edit.
+
+#### LazyCtxBinding
+
+This is an alternate version of `lazyCached` that using context variable to determinate recursion.
+This version of recursion methods also requests type erasing using `toCommonType`,
+but don't have restrictions for capturing variables and values in parser.
+`LazyCtxBinding` adds new context to parser that contains `LazyCtxBinding<T, ParserCtx, Tag>::LazyContext` by value.
+If an original parser don't have another context, you can create recursion storage instance using `makeBindingCtx(parser)`,
+and context like `auto ctx = parser.makeCtx(lazyBindingStorage);`
+
+This is an alternative version of `lazyCached` that uses a context variable to determine recursion.
+This version of recursion methods also requires type erasing, for example, using `toCommonType`,
+but it doesn't have restrictions for capturing variables and values in the parser.
+`LazyCtxBinding` adds a new context to the parser that contains `LazyCtxBinding<T, ParserCtx, Tag>::LazyContext` by value.
+If the original parser doesn't have another context,
+you can create a recursion storage instance using `makeBindingCtx(parser)`,
+and a context like `auto ctx = parser.makeCtx(lazyBindingStorage);`.
+
+#### Tag in lazy*
+The `Tag` type must be unique for any difference captured parser of `lazyCached`, `lazyForget` function.
+For cases where you call `lazyCached` only once per line, you can use the default tag `AutoTag`.
+Use macros `AutoTagT` for unique type, `AutoTagV` for tag instance.  
+If you are unsure, specialize `Tag` type manually. Be careful with func helpers that cover the tag parameter.
+For example the following code won't work correctly:
+```c++
+// Doesn't work properly
+template <typename Fn>
+auto f(Fn f) {
+// use AutoTag with current line, but this code isn't unique for difference f with the same class Fn
+    return lazyCached<AutoTagT>(f) << spaces(); 
+}
+
+// Correct version
+template <typename Tag, typename Fn>
+auto f(Fn f) {
+// use AutoTag line of call f
+    return lazyCached<Tag>(f) << spaces();
+}
+```
+
+```c++
+// Fn ~ std::function<Parser'<T>(void)>
+
+template <typename Tag, std::invocable Fn>
+auto lazyCached(Fn const&) noexcept(Fn);
+```
+
+#### Compare lazy* functions
+
+```c++
+Parser<Unit> bracesLazy() noexcept {
+    return (concat(charFrom('(', '{', '['), lazy(bracesLazy) >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat() >> success()).toCommonType();
+}
+
+Parser<Unit> bracesCache() noexcept {
+    return (concat(charFrom('(', '{', '['), lazyCached(bracesCache, AutoTagM) >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat() >> success()).toCommonType();
+}
+using ForgetTag = AutoTagT;
+auto bracesForget() noexcept -> decltype((concat(charFrom('(', '{', '['), std::declval<Parser<Unit, VoidContext, LazyForget<Unit, ForgetTag>>>() >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat() >> success())) {
+
+    return (concat(charFrom('(', '{', '['), lazyForget<Unit, ForgetTag>(bracesForget) >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat() >> success());
+}
+
+auto bracesCtx() noexcept {
+    return (concat(charFrom('(', '{', '['), lazyCtxBinding<Unit>() >> charFrom(')', '}', ']'))
+        .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
+}
+
+void usingBracesCtx() {
+    auto parser = bracesCtx();
+    auto lazyBindingStorage = makeBindingCtx(baseParser);
+    auto ctx = parser.makeCtx(lazyBindingStorage);
+    parser(stream, ctx);
+}
+```
+
+Benchmark results:
+
+| *                          | Success   | Failure   | Speedup   |
+|----------------------------|-----------|-----------|-----------|
+| bracesLazy                 | 4667ns    | 4451ns    | 0.56x     |
+| bracesCached               | 2599ns    | 2447ns    | 1.0x      |
+| bracesCacheConstexpr       | 2692ns    | 2535ns    | 0.97x     |
+| bracesForget               | 2745ns    | 2591ns    | 0.95x     |
+| bracesCtx                  | 2622ns    | 2495ns    | 0.99x     |
+| bracesCtxConstexpr         | 2647ns    | 2523ns    | 0.98x     |
+| -------------------------- | --------- | --------- | --------- |
+| bracesCachedDrop           | 1987ns    | 1904ns    | 1.31x     |
+| bracesCacheDropConstexpr   | 1618ns    | 1501ns    | 1.61x     |
+| bracesCtxDrop              | 1952ns    | 1856ns    | 1.33x     |
+| bracesCtxDropConstexpr     | 1601ns    | 1511ns    | 1.62x     |
+
+```
+AMD Ryzen 7 5700U, linux gcc 12.3.0 compiler, clang 15.0.7 linker
+100 repetitions, median value, no-drop cv < 1.7%, drop cv < 0.7%
+Run on (16 X 4369.92 MHz CPU s)
+CPU Caches:
+  L1 Data 32 KiB (x8)
+  L1 Instruction 32 KiB (x8)
+  L2 Unified 512 KiB (x8)
+  L3 Unified 4096 KiB (x2)
+```
+
+See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
+
+
 ### Modifier
 
 The helpful function to modify a parser execution is `Modifier`. It's an overloaded `operator*`, `operator*=` that wrap 
@@ -403,15 +404,31 @@ parser(s); // failed, needs to consume at least on symbol
 
 Because `operator*` has more priority than all others operators that you use, the next code is equivalent:
 ```c++
-a >> b * mod; // (a >> b) * mod
-a >> b *= mod; // a >> (b * mod)
+a << b * mod; // a << (b * mod)
+a << b *= mod; // (a << b) * mod
 ```
-Use `operator*=` as lower priority `operator*` with `modify` functionality.
+Use `operator*=` as lower priority `operator*` with `modify` functionality. Also, `operator*=` is Right-to-left.
+```
+(a | b) * mod * mod === ((a | b) * mod) * mod // Good
+(a | b) *= mod *= mod === ((a | b) *= (mod *= mod)) // Compile error, modifier can be applied only to parser  
+```
+
+### Operation precedence
+```
+a >> b >> c === (a >> b) >> c
+a | b | c === (a | b) | c
+a >> b | c === (a >> b) | c
+a | b >> c | d === (a | (b >> c)) | d
+a >> b | c >>= F === ((a >> b) | c) >>= F
+```
+
+See [cpp](https://en.cppreference.com/w/cpp/language/operator_precedence) and `tests/core/opPriorityTest.cpp` for details.
 
 ### Repeat
 The simplest way to customize `Parser::reapeat` functionality is using `Repeat` class.
 For example, if you don't need to store all values, but compute some function of it, you can use `processRepeat` function:
 ```c++
+// Just for example, use fmap to transform and context to capture variables 
 std::string s;
 auto parser = charFrom(FromRange('a', 'z')) * processRepeat([&](char c) {
     s += toupper(c);
@@ -423,7 +440,7 @@ s == "ZAQ";
 ```
 
 ### Debug
-For debug purpose use namespace `debug::`, see `parsecpp/common/debug.h` and `tests/common/debugTest.cpp`.
+For debug purpose use namespace `debug::`. See `example/json/json.cpp`, `parsecpp/common/debug.h` and `tests/common/debugTest.cpp`.
 
 ```c++
 debug::DebugContext debugContext;
@@ -431,4 +448,3 @@ auto parser = spaces() >> debug::parserWork(number<int>(), "Int") << spaces();
 parser(steam, debugContext);
 debugContext.get() // <-- Call stack
 ```
-
