@@ -149,9 +149,9 @@ int main() {
 
     return parser(stream, ctx).join([&](Json::ptr const& spExpr) {
         std::cout << "Json: " << spExpr->toString() << std::endl;
-        return 0;
+        return EXIT_SUCCESS;
     }, [&](details::ParsingError const& error) {
         std::cout << stream.generateErrorText(error) << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     });
 }

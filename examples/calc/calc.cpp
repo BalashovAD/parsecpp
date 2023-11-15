@@ -148,9 +148,9 @@ auto makeOp(FirstMatch ops) noexcept {
 
 
 //E -> T E'
-//E' -> op1 TE'  |  eps
+//E' -> ( op1 TE' )*
 //T -> F T'
-//T' -> op2 FT'  |  eps
+//T' -> ( op2 FT' )*
 //F -> NUMBER | ( E )
 
 ParserExpr makeE() noexcept;

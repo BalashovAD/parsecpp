@@ -4,6 +4,14 @@
 
 Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf) ([alt](https://drive.proton.me/urls/7DD4TQHFS8#Ao85HnCqn4OD)).
 
+## Links
+- [Examples](#Examples)
+- [Installation](#Installation)
+- [Build-in operators](#build-in-operators)
+- [Recursion](#recursion)
+- [Advanced](#Advanced)
+- [Category](#category)
+
 ## TODO List
 - [x] Disable error log by flag
 - [x] Add call stack for debug purpose
@@ -218,7 +226,7 @@ auto parser = charFrom('a', 'b', 'c').drop().repeat(); // Parser<Drop>
 // this code doesn't need to allocate memory for std::vector and works much faster
 ```
 
-### Recursion
+## Recursion
 `Parsecpp` is a top-down parser and doesn't like left recursion.
 Furthermore, building your combinator parser with direct recursion would cause a stack overflow before parsing.  
 Use `lazy`, `lazyCached`, `lazyForget`, `lazyCtxBinding` functions that will end the loop while building.
@@ -227,7 +235,7 @@ Refer to `benchmark/lazyBenchmark.cpp` for more details.
 To remove left recursion use this [general algorithm](https://en.wikipedia.org/wiki/Left_recursion#Removing_left_recursion).
 See `examples/calc` for an example.
 
-#### Lazy
+### Lazy
 The easiest way is to use the `lazy` function.
 It builds the combinator, but parser generator will only be called only while parsing the stream.
 It's slower than building full parser once before start and avoid type erasing.
@@ -249,7 +257,7 @@ Stream example("AAAAB");
 parser(example);
 ```
 
-#### LazyCached
+### LazyCached
 
 Make one instance of recursive parser in preparing time. It's a much faster way to create recursive parsers.
 However, the resulting parser (`Parser'<T>`) must not have mutable states inside, captured non-unique variables,
@@ -258,7 +266,7 @@ Also, because `LazyCached` type dependence on `Fn` which depends on `Parser<T>`,
 the generator cannot use `decltype(auto)` for the return type.
 So, usually, the generator should use `toCommonType` for type erasing.
 
-#### LazyForget
+### LazyForget
 
 This is an alternate version of `lazyCached` without type erasing.
 `LazyForget` only depends on the parser result type and doesn't create a recursive type.
@@ -266,7 +274,7 @@ You need to specify return type manually with `decltype(X)`,
 where `X` is value in `return` with changed `lazyForget<R>(f)` to `std::declval<Parser<R, Ctx, LazyForget<R>>>()`.
 This code may be (need to check it) slightly faster when `lazyCached`, but code looks harder to read and edit.
 
-#### LazyCtxBinding
+### LazyCtxBinding
 
 This is an alternate version of `lazyCached` that using context variable to determinate recursion.
 This version of recursion methods also requests type erasing using `toCommonType`,
@@ -283,7 +291,7 @@ If the original parser doesn't have another context,
 you can create a recursion storage instance using `makeBindingCtx(parser)`,
 and a context like `auto ctx = parser.makeCtx(lazyBindingStorage);`.
 
-#### Tag in lazy*
+### Tag in lazy*
 The `Tag` type must be unique for any difference captured parser of `lazyCached`, `lazyForget` function.
 For cases where you call `lazyCached` only once per line, you can use the default tag `AutoTag`.
 Use macros `AutoTagT` for unique type, `AutoTagV` for tag instance.  
@@ -312,7 +320,7 @@ template <typename Tag, std::invocable Fn>
 auto lazyCached(Fn const&) noexcept(Fn);
 ```
 
-#### Compare lazy* functions
+### Compare lazy* functions
 
 ```c++
 Parser<Unit> bracesLazy() noexcept {
@@ -374,6 +382,7 @@ CPU Caches:
 
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
 
+## Advanced
 
 ### Modifier
 
@@ -448,3 +457,45 @@ auto parser = spaces() >> debug::parserWork(number<int>(), "Int") << spaces();
 parser(steam, debugContext);
 debugContext.get() // <-- Call stack
 ```
+
+## Category
+
+An instance of the `Parser` class in C++ can be understood as both a Monad and, by extension, an Applicative functor. 
+This interpretation aligns closely with C++ implementations, though I use a slightly modified definition for these concepts to better fit the C++ context:
+```haskell
+class Functor Parser where
+	fmap :: (a -> b) -> Parser a -> Parser b
+
+class Functor Parser => Applicative Parser where
+	pure :: a -> Parser a
+	ap :: Parser (a -> b) -> Parser a -> Parser b
+	
+class Applicative Parser => Monad Parser where 
+    bind :: Parser a -> (a -> Parser b) -> Parser b
+```
+
+I propose viewing the Applicative functor from a perspective that emphasizes function application. 
+Essentially, Applicative extends the capability of `fmap` to handle functions with multiple arguments.
+This can be conceptualized in pseudo Haskell notation as: 
+```haskell
+fmap_ap :: (t_1 -> ... -> t_n -> d) -> Parser t_1 -> ... -> Parser t_n -> Parser d
+```
+
+In C++ code, this concept translates to:
+```c++
+// fmap 
+parser >>= fn; // Parser<A> >>= (A -> B) :: Parser<B> 
+// or 
+liftM(f, parser); // liftM (A -> B) Parser<A> :: Parser<B>
+
+// pure
+pure(t); // Parser<T>
+
+// fmap_ap
+liftM(f, parserA, ..., parserZ); // liftM (T_1 -> ... -> T_n -> D) Parser<T_1> ... Parser<T_n> :: Parser<D>
+
+// bind
+parser.bind(fn); // Parser<A> `.bind` (A -> Parser<B>) :: Parser<B>
+```
+
+See [TypeClassopedia](https://wiki.haskell.org/wikiupload/e/e9/Typeclassopedia.pdf) ([alt](https://drive.proton.me/urls/ARFQ2T5XV0#1rW2TSCi7O4l)) for details.
