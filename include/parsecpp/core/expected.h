@@ -22,25 +22,25 @@ public:
     static constexpr bool map_move_nothrow = std::is_nothrow_invocable_v<OnSuccess, T>
                     && std::is_nothrow_invocable_v<OnError, Error>;
 
-    constexpr explicit Expected(T &&t) noexcept
+    constexpr explicit Expected(T &&t) noexcept(std::is_nothrow_move_constructible_v<T>)
         : m_isError(false)
         , m_data(std::move(t)) {
 
     }
 
 
-    constexpr explicit Expected(T const& t) noexcept
+    constexpr explicit Expected(T const& t) noexcept(std::is_nothrow_copy_constructible_v<T>)
         : m_isError(false)
         , m_data(t) {
 
     }
 
-    constexpr explicit Expected(Error &&error) noexcept
+    constexpr explicit Expected(Error &&error) noexcept(std::is_nothrow_move_constructible_v<Error>)
         : m_isError(true)
         , m_error(std::move(error)) {
     }
 
-    constexpr explicit Expected(Error const& error) noexcept
+    constexpr explicit Expected(Error const& error) noexcept(std::is_nothrow_copy_constructible_v<Error>)
         : m_isError(true)
         , m_error(error) {
     }
@@ -57,9 +57,9 @@ public:
 
     ~Expected() noexcept {
         if (isError()) {
-            m_error.~Error();
+            std::destroy_at(&m_error);
         } else {
-            m_data.~T();
+            std::destroy_at(&m_data);
         }
     }
 

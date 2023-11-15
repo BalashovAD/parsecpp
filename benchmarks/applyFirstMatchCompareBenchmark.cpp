@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h>
 
 #include <parsecpp/full.hpp>
+#include <iostream>
 
 #include "benchmarkHelper.hpp"
 
@@ -50,7 +51,7 @@ inline auto generateChallengeSamplesWithWeights(size_t sampleSize) noexcept {
     assert(SAMPLE_SIZE >= sampleSize);
     std::array<std::string_view, testCases> out{};
 
-    auto sum = std::accumulate(samples.begin(), samples.begin() + sampleSize, 0u, [](auto init, auto const& s) {
+    auto sum = std::accumulate(samples.begin(), samples.begin() + sampleSize - 1, 0u, [](auto init, auto const& s) {
         return init + s.second;
     });
 
@@ -58,10 +59,11 @@ inline auto generateChallengeSamplesWithWeights(size_t sampleSize) noexcept {
         auto k = getRandomNumber(0, sum);
         auto currentSum = 0u;
         auto j = 0;
-        while (currentSum <= k) {
+        while (currentSum < k) {
             currentSum += samples[j].second;
             ++j;
         }
+        assert(j >= sampleSize);
         out[i] = (samples[j].first);
     }
 
@@ -362,11 +364,11 @@ BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyMap ## n ## Random, map ## 
 BENCHMARK_CAPTURE(BM_ApplyFirstMatchMapStrings, ApplyUMap ## n ## Random, umap ## n, challengeR ## n, n);\
 
 #ifdef ENABLE_HARD_BENCHMARK
-GEN_TEST_FOR(4);
-GEN_TEST_FOR(7);
-GEN_TEST_FOR(12);
-GEN_TEST_FOR(18);
-GEN_TEST_FOR(23);
+GEN_TEST_FOR(4)
+GEN_TEST_FOR(7)
+GEN_TEST_FOR(12)
+GEN_TEST_FOR(18)
+GEN_TEST_FOR(23)
 #else
-GEN_TEST_FOR(12);
+GEN_TEST_FOR(12)
 #endif

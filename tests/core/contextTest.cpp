@@ -192,3 +192,22 @@ TEST(Context, Pointer) {
     success_parsing(parser, '2', "23", "3", ctx);
     EXPECT_EQ(c, '2');
 }
+
+template <int M>
+struct Dummy {};
+
+
+TEST(Context, sizeOf) {
+    using Ctx1 = ContextWrapper<Dummy<0>>;
+    static_assert(sizeof(Ctx1) == 1);
+
+    using Ctx2 = ContextWrapper<Dummy<0>, Dummy<1>, Dummy<2>>;
+    static_assert(sizeof(Ctx2) == 1);
+    Ctx2 ctx;
+
+    using Ctx3 = ContextWrapper<Dummy<0>, Dummy<3> const>;
+    static_assert(sizeof(Ctx3) == 1);
+
+    using Ctx4 = ContextWrapper<char>;
+    static_assert(sizeof(Ctx4) == sizeof(char));
+}

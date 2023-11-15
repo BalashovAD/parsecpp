@@ -56,6 +56,25 @@ inline auto spacesFast() noexcept {
 }
 
 
+namespace details {
+
+
+template <bool allowDigit>
+constexpr std::array<bool, Stream::CHAR_MAPPING_SIZE> lettersArrayGen() {
+    std::array<bool, 256> t{false};
+    for (int c = 0; c != Stream::CHAR_MAPPING_SIZE; ++c) {
+        if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (allowDigit && ('0' <= c && c <= '9'))) {
+            t[c] = true;
+        }
+    }
+    return t;
+}
+
+template <bool allowDigit>
+static constexpr std::array<bool, Stream::CHAR_MAPPING_SIZE> lettersArray = lettersArrayGen<allowDigit>();
+
+}
+
 /**
  *
  * @return Parser<StringType>
@@ -64,9 +83,8 @@ template <bool allowDigit = false, typename StringType = std::string_view>
 auto letters() noexcept {
     return make_parser([](Stream& str) {
         auto start = str.pos();
-        while (str.checkFirst([](char c) {
-            return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (allowDigit && ('0' <= c && c <= '9'));
-        }));
+
+        while (str.checkFirst(details::lettersArray<allowDigit>));
 
         auto end = str.pos();
         if (start == end) {
@@ -177,7 +195,7 @@ auto searchText(std::string const& searchPattern) noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -196,7 +214,7 @@ auto searchText() noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -323,6 +341,16 @@ auto until() noexcept {
 }
 
 
+template <typename StringType = std::string_view>
+auto untilEnd() noexcept {
+    return Parser<StringType>::make([](Stream& stream) {
+        auto out = stream.sv();
+        stream.moveUnsafe(out.size());
+        return Parser<StringType>::data(StringType{out});
+    });
+}
+
+
 inline auto nextLine() noexcept {
     return Parser<Unit>::make([](Stream& stream) {
         auto sv = stream.sv();
@@ -351,7 +379,7 @@ template <typename StringType = std::string_view>
 auto literal(std::string str) noexcept {
     return Parser<StringType>::make([str](Stream& s) {
         if (s.sv().starts_with(str)) {
-            s.move(str.size());
+            s.moveUnsafe(str.size());
             return Parser<StringType>::data(StringType{str});
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
@@ -364,7 +392,7 @@ auto literal() noexcept {
     using StringType = std::string_view;
     return Parser<StringType>::make([](Stream& s) {
         if (s.sv().starts_with(str.sv())) {
-            s.move(str.size());
+            s.moveUnsafe(str.size());
             return Parser<StringType>::data(str.sv());
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());

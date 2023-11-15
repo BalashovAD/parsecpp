@@ -167,7 +167,45 @@ public:
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
         return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
-           return lhs.apply(stream, ctx).map(fn);
+            return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+    template <std::invocable<T> ListFn>
+    constexpr auto fmap(ListFn &&fn) const noexcept {
+        return *this >>= std::forward<ListFn>(fn);
+    }
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A> -> (A -> Parser<B>) -> Parser<B>
+     */
+    template <typename ListFn>
+        requires(nocontext && IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs = *this, fn](Stream& stream) {
+           return lhs.apply(stream).flatMap([&](T &&t) {
+               return fn(t).apply(stream);
+           });
+        });
+    }
+
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A, CtxA> -> (A -> Parser<B, CtxB>) -> Parser<B, CtxA & CtxB>
+     */
+    template <typename ListFn>
+        requires(!nocontext || !IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        using UCtx = UnionCtx<Ctx, GetParserCtx<std::invoke_result_t<ListFn, T>>>;
+
+        return Parser<ResultT, UCtx>::make([lhs = *this, fn](Stream& stream, UCtx& ctx) {
+           return lhs.apply(stream, ctx).flatMap([&](T &&t) {
+               return fn(t).apply(stream, ctx);
+           });
         });
     }
 
@@ -180,7 +218,7 @@ public:
     constexpr auto operator|(Parser<T, CtxB, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) noexcept(Parser<T, CtxB, Rhs>::nothrow) {
                 stream.restorePos(backup);
                 return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
@@ -283,7 +321,7 @@ public:
     constexpr auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>, Ctx>;
-        return P::make([value = *this](Stream& stream, auto& ctx) {
+        return P::make([value = *this](Stream& stream, auto& ctx) noexcept(nothrow) {
             std::vector<Value> out{};
             out.reserve(reserve);
 
@@ -575,21 +613,12 @@ public:
     }
 
     static constexpr Result makeError(size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{pos}};
     }
 
-#ifdef PRS_DISABLE_ERROR_LOG
     static constexpr Result makeError(std::string_view desc, size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{desc, pos}};
     }
-#else
-    static constexpr Result makeError(
-            std::string desc,
-            size_t pos,
-            details::SourceLocation source = details::SourceLocation::current()) noexcept {
-        return Result{details::ParsingError{std::move(desc), pos}};
-    }
-#endif
 
     template <typename U = T>
         requires(std::convertible_to<U, T>)

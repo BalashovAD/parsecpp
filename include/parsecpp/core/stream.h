@@ -8,12 +8,16 @@
 #include <utility>
 #include <sstream>
 #include <cassert>
+#include <numeric>
 
 
 namespace prs {
 
 class Stream {
 public:
+    static constexpr auto CHAR_MAPPING_SIZE = size_t(1) + std::numeric_limits<unsigned char>::max();
+    static_assert(CHAR_MAPPING_SIZE == 256);
+
     explicit Stream(std::string const& str) noexcept
         : Stream{str, str} {
 
@@ -99,6 +103,20 @@ public:
         }
     }
 
+    char checkFirst(std::array<bool, CHAR_MAPPING_SIZE> const& test) noexcept {
+        if (eos()) {
+            return 0;
+        } else {
+            char c = m_currentStr[0];
+            if (test[c]) {
+                m_currentStr.remove_prefix(1);
+                return c;
+            } else {
+                return 0;
+            }
+        }
+    }
+
     void restorePos(size_t pos) noexcept {
         assert(pos <= m_fullStr.size());
         m_currentStr = m_fullStr.substr(pos);
@@ -113,7 +131,7 @@ public:
         std::ostringstream stream;
         stream << "Parse error in pos: " << error.pos;
         if constexpr (!DISABLE_ERROR_LOG) {
-            stream << ", dsc: " << error.description;
+            stream << ", dsc: " << error.getDescription();
         }
         if constexpr (printAfter + printBefore > 0) {
             auto startPos = error.pos > printBefore ? error.pos - printBefore : 0;

@@ -194,7 +194,7 @@ static void BM_toArray(benchmark::State& state, Parser const& parser) {
     state.SetBytesProcessed(CHALLENGE.size() * state.iterations());
 }
 
-static inline auto insideParser = charFrom('{') >> letters<false, std::string>() << charFrom('}');
+static inline auto insideParser = charFrom('{') >> letters<false, std::string_view>() << charFrom('}');
 
 BENCHMARK_CAPTURE(BM_toArray, Loop, constructParserInLoopRepeat(insideParser));
 BENCHMARK_CAPTURE(BM_toArray, DoWhile, doWhile(insideParser));

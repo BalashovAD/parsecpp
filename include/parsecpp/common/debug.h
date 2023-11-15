@@ -141,7 +141,8 @@ public:
             }
             return t;
         }, [&](auto &&error) {
-            ctx.get().addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
+            // append is used because operator+ doesn't work with string + string_view
+            ctx.get().addLog(stream.pos(), ("Error{" + m_parserName + "}: ").append(error.getDescription()));
             return error;
         });
     }

@@ -49,3 +49,29 @@ TEST(Base, SearchText) {
     failed_parsing(parser, 0, "TeSt");
     failed_parsing(parser, 0, "");
 }
+
+TEST(Base, SearchTextForward) {
+    auto parser = searchText<true>("test");
+
+    success_parsing(parser, Unit{}, "test2", "test2");
+    success_parsing(parser, Unit{}, "22test", "test");
+    success_parsing(parser, Unit{}, "2test2", "test2");
+    success_parsing(parser, Unit{}, "2testtest2", "testtest2");
+
+    failed_parsing(parser, 0, "te st");
+    failed_parsing(parser, 0, "TeSt");
+    failed_parsing(parser, 0, "");
+}
+
+TEST(Base, SearchTextForwardConstexpr) {
+    auto parser = searchText<"test"_prs, true>();
+
+    success_parsing(parser, Unit{}, "test2", "test2");
+    success_parsing(parser, Unit{}, "2test", "test");
+    success_parsing(parser, Unit{}, "2test2", "test2");
+    success_parsing(parser, Unit{}, "2testtest2", "testtest2");
+
+    failed_parsing(parser, 0, "te st");
+    failed_parsing(parser, 0, "TeSt");
+    failed_parsing(parser, 0, "");
+}

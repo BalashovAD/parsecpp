@@ -89,7 +89,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 template <typename T, typename K>
@@ -114,7 +114,7 @@ public:
         return m_value;
     }
 private:
-    T& m_value;
+    [[no_unique_address]] T& m_value;
 };
 
 
@@ -136,7 +136,7 @@ public:
         return m_value;
     }
 private:
-    T m_value{};
+    [[no_unique_address]] T m_value{};
 };
 
 
@@ -158,7 +158,7 @@ public:
         return m_value;
     }
 private:
-    T const& m_value;
+    [[no_unique_address]] T const& m_value;
 };
 
 
@@ -339,10 +339,10 @@ static constexpr bool DISABLE_ERROR_LOG = false;
 #define PRS_MAKE_ERROR(strError, pos) makeError(strError, pos);
 #else
 static constexpr bool DISABLE_ERROR_LOG = true;
-#define PRS_MAKE_ERROR(strError, pos) makeError("", pos);
+#define PRS_MAKE_ERROR(strError, pos) makeError(pos);
 #endif
 
-static constexpr size_t MAX_ITERATION = 1000000;
+static constexpr size_t MAX_ITERATION = 1'000'000;
 
 }
 
@@ -350,11 +350,45 @@ static constexpr size_t MAX_ITERATION = 1000000;
 
 namespace prs::details {
 
-struct ParsingError {
+template <bool disableDescription>
+struct ParsingErrorT;
+
+template <>
+struct ParsingErrorT<false> {
+    ParsingErrorT() = default;
+
+    explicit ParsingErrorT(std::string_view s, size_t p) noexcept
+        : description(s), pos(p) {};
+
+    explicit ParsingErrorT(size_t p) noexcept
+        : pos(p) {};
+
+    std::string_view getDescription() const noexcept {
+        return description;
+    }
+
     std::string description;
     size_t pos{};
 };
 
+template <>
+struct ParsingErrorT<true> {
+    ParsingErrorT() = default;
+
+    explicit ParsingErrorT(std::string_view s, size_t p) noexcept
+        : pos(p) {};
+
+    explicit ParsingErrorT(size_t p) noexcept
+        : pos(p) {};
+
+    std::string_view getDescription() const noexcept {
+        return "";
+    }
+
+    size_t pos{};
+};
+
+using ParsingError = ParsingErrorT<DISABLE_ERROR_LOG>;
 
 }
 
@@ -518,25 +552,25 @@ public:
     static constexpr bool map_move_nothrow = std::is_nothrow_invocable_v<OnSuccess, T>
                     && std::is_nothrow_invocable_v<OnError, Error>;
 
-    constexpr explicit Expected(T &&t) noexcept
+    constexpr explicit Expected(T &&t) noexcept(std::is_nothrow_move_constructible_v<T>)
         : m_isError(false)
         , m_data(std::move(t)) {
 
     }
 
 
-    constexpr explicit Expected(T const& t) noexcept
+    constexpr explicit Expected(T const& t) noexcept(std::is_nothrow_copy_constructible_v<T>)
         : m_isError(false)
         , m_data(t) {
 
     }
 
-    constexpr explicit Expected(Error &&error) noexcept
+    constexpr explicit Expected(Error &&error) noexcept(std::is_nothrow_move_constructible_v<Error>)
         : m_isError(true)
         , m_error(std::move(error)) {
     }
 
-    constexpr explicit Expected(Error const& error) noexcept
+    constexpr explicit Expected(Error const& error) noexcept(std::is_nothrow_copy_constructible_v<Error>)
         : m_isError(true)
         , m_error(error) {
     }
@@ -553,9 +587,9 @@ public:
 
     ~Expected() noexcept {
         if (isError()) {
-            m_error.~Error();
+            std::destroy_at(&m_error);
         } else {
-            m_data.~T();
+            std::destroy_at(&m_data);
         }
     }
 
@@ -804,12 +838,16 @@ private:
 #include <utility>
 #include <sstream>
 #include <cassert>
+#include <numeric>
 
 
 namespace prs {
 
 class Stream {
 public:
+    static constexpr auto CHAR_MAPPING_SIZE = size_t(1) + std::numeric_limits<unsigned char>::max();
+    static_assert(CHAR_MAPPING_SIZE == 256);
+
     explicit Stream(std::string const& str) noexcept
         : Stream{str, str} {
 
@@ -895,6 +933,20 @@ public:
         }
     }
 
+    char checkFirst(std::array<bool, CHAR_MAPPING_SIZE> const& test) noexcept {
+        if (eos()) {
+            return 0;
+        } else {
+            char c = m_currentStr[0];
+            if (test[c]) {
+                m_currentStr.remove_prefix(1);
+                return c;
+            } else {
+                return 0;
+            }
+        }
+    }
+
     void restorePos(size_t pos) noexcept {
         assert(pos <= m_fullStr.size());
         m_currentStr = m_fullStr.substr(pos);
@@ -909,7 +961,7 @@ public:
         std::ostringstream stream;
         stream << "Parse error in pos: " << error.pos;
         if constexpr (!DISABLE_ERROR_LOG) {
-            stream << ", dsc: " << error.description;
+            stream << ", dsc: " << error.getDescription();
         }
         if constexpr (printAfter + printBefore > 0) {
             auto startPos = error.pos > printBefore ? error.pos - printBefore : 0;
@@ -1194,7 +1246,45 @@ public:
     constexpr friend auto operator>>=(Parser lhs, ListFn fn) noexcept {
         using ResultT = std::decay_t<std::invoke_result_t<ListFn, T>>;
         return Parser<ResultT, Ctx>::make([lhs, fn](Stream& stream, auto& ctx) {
-           return lhs.apply(stream, ctx).map(fn);
+            return lhs.apply(stream, ctx).map(fn);
+        });
+    }
+
+    template <std::invocable<T> ListFn>
+    constexpr auto fmap(ListFn &&fn) const noexcept {
+        return *this >>= std::forward<ListFn>(fn);
+    }
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A> -> (A -> Parser<B>) -> Parser<B>
+     */
+    template <typename ListFn>
+        requires(nocontext && IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        return Parser<ResultT, Ctx>::make([lhs = *this, fn](Stream& stream) {
+           return lhs.apply(stream).flatMap([&](T &&t) {
+               return fn(t).apply(stream);
+           });
+        });
+    }
+
+
+    /*
+     * bind operator
+     * @def bind :: Parser<A, CtxA> -> (A -> Parser<B, CtxB>) -> Parser<B, CtxA & CtxB>
+     */
+    template <typename ListFn>
+        requires(!nocontext || !IsVoidCtx<GetParserCtx<std::invoke_result_t<ListFn, T>>>)
+    constexpr auto bind(ListFn fn) const noexcept {
+        using ResultT = GetParserResult<std::invoke_result_t<ListFn, T>>;
+        using UCtx = UnionCtx<Ctx, GetParserCtx<std::invoke_result_t<ListFn, T>>>;
+
+        return Parser<ResultT, UCtx>::make([lhs = *this, fn](Stream& stream, UCtx& ctx) {
+           return lhs.apply(stream, ctx).flatMap([&](T &&t) {
+               return fn(t).apply(stream, ctx);
+           });
         });
     }
 
@@ -1207,7 +1297,7 @@ public:
     constexpr auto operator|(Parser<T, CtxB, Rhs> rhs) const noexcept {
         return Parser<T>::make([lhs = *this, rhs](Stream& stream) {
             auto backup = stream.pos();
-            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) {
+            return lhs.apply(stream).flatMapError([&](details::ParsingError const& firstError) noexcept(Parser<T, CtxB, Rhs>::nothrow) {
                 stream.restorePos(backup);
                 return rhs.apply(stream).flatMapError([&](details::ParsingError const& secondError) {
                     return PRS_MAKE_ERROR(
@@ -1310,7 +1400,7 @@ public:
     constexpr auto repeat() const noexcept {
         using Value = T;
         using P = Parser<std::vector<Value>, Ctx>;
-        return P::make([value = *this](Stream& stream, auto& ctx) {
+        return P::make([value = *this](Stream& stream, auto& ctx) noexcept(nothrow) {
             std::vector<Value> out{};
             out.reserve(reserve);
 
@@ -1602,21 +1692,12 @@ public:
     }
 
     static constexpr Result makeError(size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{pos}};
     }
 
-#ifdef PRS_DISABLE_ERROR_LOG
     static constexpr Result makeError(std::string_view desc, size_t pos) noexcept {
-        return Result{details::ParsingError{"", pos}};
+        return Result{details::ParsingError{desc, pos}};
     }
-#else
-    static constexpr Result makeError(
-            std::string desc,
-            size_t pos,
-            details::SourceLocation source = details::SourceLocation::current()) noexcept {
-        return Result{details::ParsingError{std::move(desc), pos}};
-    }
-#endif
 
     template <typename U = T>
         requires(std::convertible_to<U, T>)
@@ -2037,6 +2118,10 @@ auto liftM(Fn fn, Args &&...args) noexcept {
 }
 
 
+/*
+ * Applicative
+ * liftM :: (A1 -> ... -> An -> B) -> Parser<A> -> ... -> Parser<An> -> Parser<B>
+ */
 template <typename Fn, ParserType ...Args>
     requires(!IsVoidCtx<GetContextTrait<Fn>> || (!IsVoidCtx<GetParserCtx<Args>> || ...))
 auto liftM(Fn fn, Args &&...args) noexcept {
@@ -2051,13 +2136,21 @@ auto concat(Args &&...args) noexcept {
     return liftM(details::MakeTuple{}, std::forward<Args>(args)...);
 }
 
+/*
+ * satisfy :: (char -> bool) -> Parser<char>
+ */
 template <typename Fn>
 constexpr auto satisfy(Fn&& tTest) noexcept {
     return Parser<char>::make([test = std::forward<Fn>(tTest)](Stream& stream) {
-        if (auto c = stream.checkFirst(test); c != 0) {
+        if (stream.eos()) {
+            return Parser<char>::PRS_MAKE_ERROR("satisfy eos", stream.pos());
+        }
+        char c = stream.front();
+        if (test(c)) {
+            stream.moveUnsafe();
             return Parser<char>::data(c);
         } else {
-            return Parser<char>::PRS_MAKE_ERROR("satisfy", stream.pos());
+            return Parser<char>::PRS_MAKE_ERROR("satisfy eq", stream.pos());
         }
     });
 }
@@ -2536,6 +2629,25 @@ inline auto spacesFast() noexcept {
 }
 
 
+namespace details {
+
+
+template <bool allowDigit>
+constexpr std::array<bool, Stream::CHAR_MAPPING_SIZE> lettersArrayGen() {
+    std::array<bool, 256> t{false};
+    for (int c = 0; c != Stream::CHAR_MAPPING_SIZE; ++c) {
+        if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (allowDigit && ('0' <= c && c <= '9'))) {
+            t[c] = true;
+        }
+    }
+    return t;
+}
+
+template <bool allowDigit>
+static constexpr std::array<bool, Stream::CHAR_MAPPING_SIZE> lettersArray = lettersArrayGen<allowDigit>();
+
+}
+
 /**
  *
  * @return Parser<StringType>
@@ -2544,9 +2656,8 @@ template <bool allowDigit = false, typename StringType = std::string_view>
 auto letters() noexcept {
     return make_parser([](Stream& str) {
         auto start = str.pos();
-        while (str.checkFirst([](char c) {
-            return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (allowDigit && ('0' <= c && c <= '9'));
-        }));
+
+        while (str.checkFirst(details::lettersArray<allowDigit>));
 
         auto end = str.pos();
         if (start == end) {
@@ -2657,7 +2768,7 @@ auto searchText(std::string const& searchPattern) noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -2676,7 +2787,7 @@ auto searchText() noexcept {
         auto &str = stream.sv();
         if (auto pos = str.find(searchPattern.sv()); pos != std::string_view::npos) {
             if constexpr (forwardSearch) {
-                stream.move(pos > 0 ? pos - 1 : 0);
+                stream.move(pos);
                 return Parser<Unit>::data({});
             } else {
                 str = str.substr(pos + searchPattern.size());
@@ -2803,6 +2914,16 @@ auto until() noexcept {
 }
 
 
+template <typename StringType = std::string_view>
+auto untilEnd() noexcept {
+    return Parser<StringType>::make([](Stream& stream) {
+        auto out = stream.sv();
+        stream.moveUnsafe(out.size());
+        return Parser<StringType>::data(StringType{out});
+    });
+}
+
+
 inline auto nextLine() noexcept {
     return Parser<Unit>::make([](Stream& stream) {
         auto sv = stream.sv();
@@ -2831,7 +2952,7 @@ template <typename StringType = std::string_view>
 auto literal(std::string str) noexcept {
     return Parser<StringType>::make([str](Stream& s) {
         if (s.sv().starts_with(str)) {
-            s.move(str.size());
+            s.moveUnsafe(str.size());
             return Parser<StringType>::data(StringType{str});
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
@@ -2844,7 +2965,7 @@ auto literal() noexcept {
     using StringType = std::string_view;
     return Parser<StringType>::make([](Stream& s) {
         if (s.sv().starts_with(str.sv())) {
-            s.move(str.size());
+            s.moveUnsafe(str.size());
             return Parser<StringType>::data(str.sv());
         } else {
             return Parser<StringType>::makeError("Cannot find literal", s.pos());
@@ -3085,7 +3206,7 @@ class Repeat {
 public:
     Repeat() noexcept = default;
 
-    auto operator()(auto& parser, Stream& stream, Ctx& ctx) {
+    auto operator()(auto& parser, Stream& stream, Ctx& ctx) const {
         using P = Parser<typename std::decay_t<decltype(parser)>::Type, Ctx>;
 
         get().init();
@@ -3399,6 +3520,156 @@ template <typename Fn>
 Finally(Fn) -> Finally<std::decay_t<Fn>>;
 
 }
+// #include <parsecpp/utils/memoizer.hpp>
+
+
+namespace prs {
+
+namespace details {
+
+
+template <typename K, typename V>
+class MapStorage {
+public:
+    MapStorage() = default;
+
+    using Pointer = V const*;
+    Pointer find(K const& key) const noexcept {
+        if (auto it = m_storage.find(key); it != m_storage.end()) {
+            return std::addressof(it->second);
+        } else {
+            return nullptr;
+        }
+    }
+
+    V const& emplace(K const& k, V &&v) {
+        return m_storage.emplace(k, v).first->second;
+    }
+private:
+    std::map<K, V> m_storage;
+};
+
+template <typename K, typename V>
+class HashMapStorage {
+public:
+    HashMapStorage() = default;
+
+    using Pointer = V*;
+    Pointer find(K const& key) noexcept {
+        if (auto it = m_storage.find(key); it != m_storage.end()) {
+            return std::addressof(it->second);
+        } else {
+            return nullptr;
+        }
+    }
+
+    V const& emplace(K const& k, V &&v) {
+        return m_storage.emplace(k, v).first->second;
+    }
+private:
+    std::unordered_map<K, V> m_storage;
+};
+
+
+template <typename K, typename V>
+class VectorStorage {
+public:
+    static constexpr size_t EXPECTED_MAX_ELEMENTS = 10;
+
+    VectorStorage() {
+        m_storage.reserve(EXPECTED_MAX_ELEMENTS);
+    }
+
+    using Pointer = V const*;
+    Pointer find(K const& key) const noexcept {
+        for (auto const& st : m_storage) {
+            if (st.first == key) {
+                return std::addressof(st.second);
+            }
+        }
+        return nullptr;
+    }
+
+    V const& emplace(K const& k, V &&v) {
+        assert(!find(k));
+
+        return m_storage.emplace_back(std::pair<K, V>(k, v)).second;
+    }
+private:
+    std::vector<std::pair<K, V>> m_storage;
+};
+
+
+}
+
+template <typename Out, typename Key, typename Fn, typename StorageT>
+class Memoizer {
+public:
+    explicit Memoizer(Fn fn)
+        : m_fn(std::move(fn)) {
+
+    }
+
+    template <typename ...Args>
+        requires(sizeof...(Args) > 1)
+    Out const& operator()(Args const& ...args) const {
+        auto key = std::make_tuple(args...);
+        if (auto it = m_storage.find(key); it) {
+            return *it;
+        } else {
+            return m_storage.emplace(key, m_fn(args...));
+        }
+    }
+
+
+    Out const& operator()(Key const& key) const {
+        if (auto it = m_storage.find(key); it) {
+            return *it;
+        } else {
+            return m_storage.emplace(key, m_fn(key));
+        }
+    }
+private:
+    mutable StorageT m_storage;
+    Fn m_fn;
+};
+
+namespace details {
+
+template <typename A, typename ...Args>
+struct GetFirst {
+    using type = A;
+};
+
+template <typename ...Args>
+using getFirst = typename GetFirst<Args...>::type;
+
+/*
+ * template <typename A, typename ...>
+ * using getFirst = A;
+ * Compile error: pack expansion argument for non-pack parameter
+ * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=59498
+ */
+
+}
+
+
+template <typename ...Args, typename Fn>
+auto makeMapMemoizer(Fn fn) {
+    using Out = std::invoke_result_t<Fn, Args...>;
+    using Key = std::conditional_t<sizeof...(Args) == 1, details::getFirst<Args...>, std::tuple<Args...>>;
+    return Memoizer<Out, Key, std::remove_cv_t<Fn>, details::MapStorage<Key, Out>>{std::move(fn)};
+}
+
+
+template <template<typename K, typename V> typename Storage, typename ...Args, typename Fn>
+auto makeTMemoizer(Fn fn) {
+    using Out = std::invoke_result_t<Fn, Args...>;
+    using Key = std::conditional_t<sizeof...(Args) == 1, details::getFirst<Args...>, std::tuple<Args...>>;
+    return Memoizer<Out, Key, std::remove_cv_t<Fn>, Storage<Key, Out>>{std::move(fn)};
+}
+
+}
 
 // #include <parsecpp/common/debug.h>
 
@@ -3547,7 +3818,8 @@ public:
             }
             return t;
         }, [&](auto &&error) {
-            ctx.get().addLog(stream.pos(), "Error{" + m_parserName + "}: " + error.description);
+            // append is used because operator+ doesn't work with string + string_view
+            ctx.get().addLog(stream.pos(), ("Error{" + m_parserName + "}: ").append(error.getDescription()));
             return error;
         });
     }
