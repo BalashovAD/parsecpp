@@ -3,7 +3,7 @@
 static constexpr auto a = charFrom('a');
 static constexpr auto b = charFrom('b');
 static constexpr auto c = charFrom('c');
-//static constexpr auto d = charFrom('d');
+static constexpr auto d = charFrom('d');
 
 char f(char q) noexcept {
     return toupper(q);
@@ -31,6 +31,17 @@ TEST(OpPriority, ForgetOr) {
     failed_parsing(parser, 1, "acd");
 }
 
+// a | b >> c | d === (a | (b >> c)) | d
+TEST(OpPriority, OrRightOr) {
+    auto parser = a | b >> c | d;
+
+    success_parsing(parser, 'c', "bcx", "x");
+    success_parsing(parser, 'a', "ax", "x");
+    success_parsing(parser, 'd', "dx", "x");
+
+    failed_parsing(parser.endOfStream(), 1, "acx");
+}
+
 
 // a >> b | c >>= F === ((a >> b) | c) >>= F
 TEST(OpPriority, ForgetOrFmap) {
@@ -56,4 +67,11 @@ TEST(OpPriority, ForgetMod) {
 TEST(OpPriority, ForgetModLow) {
     auto parser = a << b *= Mod<'a'>{};
     success_parsing(parser, '!', "abd", "d");
+}
+
+// (a | b) * mod * mod
+TEST(OpPriority, ForgetMod2) {
+    auto parser = (a | b) * Mod<'a'>{} * Mod<'b'>{};
+    success_parsing(parser, '!', "abd", "bd");
+    success_parsing(parser, '!', "bd", "d");
 }

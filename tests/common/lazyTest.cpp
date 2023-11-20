@@ -21,6 +21,23 @@ TEST(Lazy, ABA) {
     failed_parsing(parser, 4, "AAAAC");
 }
 
+TEST(SelfLazy, NumberInbraces) {
+    auto parser = selfLazy<int>([](auto const& p) {
+        constexpr auto num = number<int>();
+        return num | charFrom<'{'>() >> p << charFrom<'}'>()
+                | charFrom<'<'>() >> p << charFrom<'>'>()
+                | charFrom<'('>() >> p << charFrom<')'>();
+    }).endOfStream();
+
+    success_parsing(parser, 123, "(({{<(<{<{<((123))>}>}>)>}}))");
+    success_parsing(parser, 123, "123");
+
+    failed_parsing(parser, 0, "(123");
+    failed_parsing(parser, 0, "123>");
+    failed_parsing(parser, 0, "(123>");
+    failed_parsing(parser, 0, "(<123)>");
+}
+
 Parser<Unit> braces() noexcept {
     return (concat(charFrom('(', '{', '['), lazy(braces).maybe() >> charFrom(')', '}', ']'))
         .cond([](std::tuple<char, char> const& cc) {

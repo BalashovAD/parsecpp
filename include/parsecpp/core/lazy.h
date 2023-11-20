@@ -1,6 +1,7 @@
 #pragma once
 
 #include <parsecpp/core/parser.h>
+#include <parsecpp/utils/funcHelper.h>
 
 #include <source_location>
 
@@ -18,6 +19,18 @@ auto lazy(Fn genParser) noexcept {
             return genParser().apply(stream, ctx);
         });
     }
+}
+
+
+template <typename RetType, typename Fn>
+auto selfLazy(Fn parserGen) noexcept {
+    return Parser<RetType>::make([parserGen](Stream& stream) {
+        details::Y t{[&](auto const& self, Stream& s) {
+            return parserGen(Parser<RetType>::make(self)).apply(s);
+        }};
+
+        return t(stream);
+    });
 }
 
 

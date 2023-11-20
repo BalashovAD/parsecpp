@@ -4,11 +4,12 @@ project(parsercpp)
 set(CMAKE_CXX_STANDARD 20)
 
 option(Parsecpp_DisableError   "Disable error" OFF)
+
+option(Parsecpp_HugePagesBenchmark   "Huge pages" OFF)
 option(Parsecpp_EnableHardBenchmark   "Enable hard benchmark" OFF)
 option(Parsecpp_Sanitizer   "Enable sanitizer" OFF)
 option(Parsecpp_SingleInclude   "Use single include file" OFF)
 option(Parsecpp_AnnotateAssembler   "Annotate assembler -g3" OFF)
-option(Parsecpp_HugePagesBenchmark   "Huge pages" OFF)
 
 if(${CCACHE_FOUND})
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
