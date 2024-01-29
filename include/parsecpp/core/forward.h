@@ -13,7 +13,8 @@ namespace prs {
 
 class Stream;
 template <typename Fn, ContextType Ctx>
-static constexpr bool IsParserFn = std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
+static constexpr bool IsParserFn =
+        std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
 
 template <typename T, ContextType Ctx, typename Fn>
 requires (IsParserFn<Fn, Ctx>)

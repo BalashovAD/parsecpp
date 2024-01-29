@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 
 option(Parsecpp_DisableError   "Disable error" OFF)
 
-option(Parsecpp_HugePagesBenchmark   "Huge pages" OFF)
 option(Parsecpp_EnableHardBenchmark   "Enable hard benchmark" OFF)
 option(Parsecpp_Sanitizer   "Enable sanitizer" OFF)
 option(Parsecpp_SingleInclude   "Use single include file" OFF)

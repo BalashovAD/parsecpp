@@ -12,18 +12,7 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 - [Advanced](#Advanced)
 - [Category](#category)
 
-## TODO List
-- [x] Disable error log by flag
-- [x] Add call stack for debug purpose
-- [x] Add custom context for parsing
-- [ ] Support LL(k) grammatical rules
-- [ ] Non ascii symbols
-- [ ] Lookahead operators
-- [ ] SIMD
-
 ## Examples
-
-All quick examples are located in `examples/quickExamples`.
 
 ### Hello username
 ```c++
@@ -39,7 +28,7 @@ std::cout << "Name is " << hello(helloExample).join([](std::string_view name) {
 ```
 
 ### Parse in class
-
+Here's an example of parsing a complex object into a structure and verifying the correctness of the result.
 ```c++
 struct Point {
     int x;
@@ -53,19 +42,48 @@ public:
 
 // Parser<Point>: (%int%;%int%)
 auto pointParser = between('(', ')',
-           liftM(details::MakeClass<Point>{}, number<int>(), charFrom(';') >> number<int>()));
+       liftM(details::MakeClass<Point>{}, number<int>(), charFrom(';') >> number<int>()));
 
 // Parser<Circle>: Circle\s*%Point%\s*%double%
 auto parser = literal("Circle") >> spaces() >>
-        liftM(details::MakeClass<Circle>{}, pointParser, spaces() >> number<double>());
+        liftM(details::MakeClass<Circle>{}, pointParser, spaces() >> number<double>())
+        .cond([](Circle const& c) {
+            return c._radius >= 0;
+        });
 
 Stream example{"Circle (1;-3) 4.5"};
-parser(example);
+auto result = parser(example);
+if (result) {
+    result.data(); // Circle, assert(_radius >= .0)
+}
 ```
+
+### Sum
+Here's an example where we calculate the sum of the products of paired numbers **in place** and return only the resulting sum.
+```cpp
+struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
+    void add(Container& sum, std::tuple<double, double> priceAndQty) const noexcept {
+        sum += std::get<0>(priceAndQty) * std::get<1>(priceAndQty);
+    }
+};
+
+// Parser<std::tuple<double, double>>
+auto pairParser = concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>());
+// Parser<double>
+auto parser = (pairParser * CountSumRepeat{}).endOfStream();    Stream example("(1.5;3)(2;1)(0;3)");
+Stream example("(1.5;3)(2;1)(0;3)");
+parser(example).join([](double sum) {
+    std::cout << "Sum: " << sum << std::endl;
+}, [&example](auto const& error) {
+    std::cout << "Error: " << example.generateErrorText(error) << std::endl;
+});
+```
+
+All quick examples are located in `examples/quickExamples`.
 
 ## Installation
 
-This header only library requires a c++20 compiler.  
+This header only library requires a **c++20** compiler.  
 You can include the library as a git submodule in your project and add 
 `target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})` to your `CMakeLists.txt` file.
 
@@ -75,10 +93,19 @@ Use `all.hpp` as the base parser header, while `full.hpp` contains some extra op
 There is also a configurable parameter, `Parsecpp_DisableError`, 
 that you can turn on to optimize error string. `-DParsecpp_DisableError=ON` is recommended for release builds.
 
+## TODO List
+- [x] Disable error log by flag
+- [x] Add call stack for debug purpose
+- [x] Add custom context for parsing
+- [ ] Support LL(k) grammatical rules
+- [ ] Non ascii symbols
+- [ ] Lookahead operators
+- [ ] SIMD
+
 ## Build-in operators
 
 In the following text, `Parser<A>` refers to a `prs::Parser<A, VoidContext, Fn>` for any `Fn`.   
-The second template argument is an implementation trick that doesn't change the category. 
+The third template argument is an implementation trick that doesn't change the category. 
 `Parser'<A>` is simply shorthand for `prs::Parser<A> := prs::Parser<A, VoidContext, StdFunction>`, 
 which is a common type for all `Parser<A>`. `Parser'<A, Ctx>` is shorthand for `prs::Parser<A, Ctx>`, 
 which is a common type for all `Parser<A, Ctx>`.  

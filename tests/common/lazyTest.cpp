@@ -32,10 +32,10 @@ TEST(SelfLazy, NumberInbraces) {
     success_parsing(parser, 123, "(({{<(<{<{<((123))>}>}>)>}}))");
     success_parsing(parser, 123, "123");
 
-    failed_parsing(parser, 0, "(123");
-    failed_parsing(parser, 0, "123>");
-    failed_parsing(parser, 0, "(123>");
-    failed_parsing(parser, 0, "(<123)>");
+    failed_parsing(parser, 4, "(123");
+    failed_parsing(parser, 3, "123>");
+    failed_parsing(parser, 4, "(123>");
+    failed_parsing(parser, 5, "(<123)>");
 }
 
 Parser<Unit> braces() noexcept {
@@ -152,6 +152,10 @@ TEST(LazyForget, rec) {
     failed_parsing(parser, 2, "abab");
     failed_parsing(parser, 0, "aaabb");
     failed_parsing(parser, 6, "aaabbbb");
+
+    details::YParser t{[](auto const&, auto&) {
+        return Parser<int>::data(3);
+    }};
 }
 
 

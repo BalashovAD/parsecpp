@@ -25,9 +25,16 @@ auto lazy(Fn genParser) noexcept {
 template <typename RetType, typename Fn>
 auto selfLazy(Fn parserGen) noexcept {
     return Parser<RetType>::make([parserGen](Stream& stream) {
-        details::Y t{[&](auto const& self, Stream& s) {
-            return parserGen(Parser<RetType>::make(self)).apply(s);
+        details::YParser t{[&](auto const& self, Stream& s) -> Parser<RetType>::Result {
+            return parserGen(Parser<RetType>::make([&](Stream& s) -> Parser<RetType>::Result {
+                return self(s);
+            })).apply(s);
         }};
+
+        using YT = std::decay_t<decltype(t)>;
+        static_assert(std::is_invocable_v<YT, Stream&>);
+        static_assert(IsParserFn<YT, VoidContext>);
+//        static_assert(IsParserFn<details::YParser<Fn, VoidContext>, VoidContext>);
 
         return t(stream);
     });
@@ -166,15 +173,15 @@ public:
     using ParserResult = T;
 
     struct LazyContext {
-        explicit LazyContext(P const*const p) : parser(p) {};
-        P const*const parser;
+        explicit LazyContext(void const*const p) : parser(p) {};
+        void const*const parser;
     };
 
     explicit LazyCtxBinding() noexcept = default;
 
     template <ContextType Context>
-    auto operator()(Stream& stream, Context& ctx) const {
-        auto const*const parser = get<LazyContext>(ctx).parser;
+    details::ResultType<ParserResult> operator()(Stream& stream, Context& ctx) const {
+        auto const*const parser = reinterpret_cast<P const*const>(get<LazyContext>(ctx).parser);
         return parser->apply(stream, ctx);
     }
 };

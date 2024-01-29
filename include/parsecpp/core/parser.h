@@ -35,7 +35,7 @@ public:
 
 
     template <typename Fn>
-        requires (IsParserFn<Func, Ctx>)
+        requires (IsParserFn<Fn, Ctx>)
     constexpr static auto make(Fn &&f) noexcept {
         return Parser<T, Ctx, Fn>(std::forward<Fn>(f));
     }

@@ -102,14 +102,14 @@ auto Ycomb(ParserValue value) noexcept {
 
         auto np = (parser >>= emplace);
         const auto p = [&](auto const& rec) -> void {
-            np.apply(stream, ctx).map([&](Drop _) {
+            np.apply(stream, ctx).map([&](Drop _) -> Drop {
                 backup = stream.pos();
                 rec();
                 return _;
             });
         };
 
-        details::Y{p}();
+        details::YY<void, decltype(p)> {p}();
         stream.restorePos(backup);
         return Parser<Vector>::data(ans);
     });

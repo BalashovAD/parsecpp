@@ -22,6 +22,14 @@ Parser<Unit> bracesLazy() noexcept {
 }
 
 
+auto bracesSelfLazy() noexcept {
+    return selfLazy<Unit>([](auto const& self) {
+        return concat(charFrom('(', '{', '['), self >> charFrom(')', '}', ']'))
+                .cond(checkBraces).template repeat<REPEAT_PRE_ALLOC>() >> success();
+    });
+}
+
+
 Parser<Unit> bracesCache() noexcept {
     return (concat(charFrom('(', '{', '['), lazyCached(bracesCache, AutoTagV) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat<REPEAT_PRE_ALLOC>() >> success()).toCommonType();
@@ -137,6 +145,7 @@ void BM_bracesFailureCtx(benchmark::State& state, P baseParser) {
 }
 
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesLazy, bracesLazy().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesSuccess, bracesSelfLazy, bracesSelfLazy().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCached, bracesCache().endOfStream());
 #ifdef ENABLE_HARD_BENCHMARK
 BENCHMARK_CAPTURE(BM_bracesSuccess, bracesCachedDrop, bracesCacheDrop().endOfStream());
@@ -152,6 +161,7 @@ BENCHMARK_CAPTURE(BM_bracesSuccessCtx, bracesCtxConstexpr, bracesCtxConstexpr())
 #endif
 
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesLazy, bracesLazy().endOfStream());
+BENCHMARK_CAPTURE(BM_bracesFailure, bracesSelfLazy, bracesSelfLazy().endOfStream());
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesCached, bracesCache().endOfStream());
 #ifdef ENABLE_HARD_BENCHMARK
 BENCHMARK_CAPTURE(BM_bracesFailure, bracesCachedDrop, bracesCacheDrop().endOfStream());
