@@ -397,7 +397,8 @@ namespace prs {
 
 class Stream;
 template <typename Fn, ContextType Ctx>
-static constexpr bool IsParserFn = std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
+static constexpr bool IsParserFn =
+        std::is_invocable_v<Fn, Stream&, Ctx&> || (IsVoidCtx<Ctx> && std::is_invocable_v<Fn, Stream&>);
 
 template <typename T, ContextType Ctx, typename Fn>
 requires (IsParserFn<Fn, Ctx>)
@@ -511,12 +512,79 @@ public:
 
     template <typename ...Args>
     decltype(auto) operator()(Args&&...args) const {
-        return m_fn(*this, std::forward<Args>(args)...);
+        return std::invoke(m_fn, *this, std::forward<Args>(args)...);
     }
 
 private:
     Fn m_fn;
 };
+
+
+// This implementation of Y combinator with implicit return type is needed because
+// we can meet recursive initialization in case then Fn is lambda and capture a concept with call check, like a Parser
+// Error: function 'operator()<>' with deduced return type cannot be used before it is defined
+// while substituting into a lambda expression here
+// while substituting template arguments into constraint expression here `requires (IsParserFn<Fn, Ctx>)`
+template <typename T, typename Fn>
+class YY {
+public:
+    explicit YY(Fn fn) noexcept
+        : m_fn(fn)
+    {}
+
+    template <typename ...Args>
+    T operator()(Args&&...args) const {
+        return std::invoke(m_fn, *this, std::forward<Args>(args)...);
+    }
+
+private:
+    Fn m_fn;
+};
+
+/**
+ * The next  code sometimes broken for deducting type, so YParser is
+template <typename ...Args>
+decltype(auto) operator()(Args&&...args) const {
+    return std::invoke(m_fn, *this, std::forward<Args>(args)...);
+}
+ */
+template <typename Fn, typename Ctx>
+class YParser;
+
+template <typename Fn>
+class YParser<Fn, VoidContext> {
+public:
+    explicit YParser(Fn fn) noexcept
+        : m_fn(fn)
+    {}
+
+    std::invoke_result_t<Fn, YParser<Fn, VoidContext> const&, Stream&> operator()(Stream& s) const {
+        return std::invoke(m_fn, *this, s);
+    }
+private:
+    Fn m_fn;
+};
+
+template <typename Fn, typename Ctx>
+class YParser {
+public:
+    explicit YParser(Fn fn) noexcept
+        : m_fn(fn)
+    {}
+
+//    decltype(auto) operator()(Stream& s, Ctx& ctx) const {
+//        return std::invoke(m_fn, *this, s, ctx);
+//    }
+
+    decltype(auto) operator()(Stream& s) const {
+        return std::invoke(m_fn, *this, s);
+    }
+private:
+    Fn m_fn;
+};
+
+template <typename Fn>
+YParser(Fn f) -> YParser<Fn, VoidContext>;
 
 
 template <size_t pw, typename T, typename Fn>
@@ -1113,7 +1181,7 @@ public:
 
 
     template <typename Fn>
-        requires (IsParserFn<Func, Ctx>)
+        requires (IsParserFn<Fn, Ctx>)
     constexpr static auto make(Fn &&f) noexcept {
         return Parser<T, Ctx, Fn>(std::forward<Fn>(f));
     }
@@ -1774,6 +1842,8 @@ Expected<T, details::ParsingError> Pimpl<T, VoidContext>::operator()(Stream& s) 
 
 // #include <parsecpp/core/parser.h>
 
+// #include <parsecpp/utils/funcHelper.h>
+
 
 #include <source_location>
 
@@ -1791,6 +1861,25 @@ auto lazy(Fn genParser) noexcept {
             return genParser().apply(stream, ctx);
         });
     }
+}
+
+
+template <typename RetType, typename Fn>
+auto selfLazy(Fn parserGen) noexcept {
+    return Parser<RetType>::make([parserGen](Stream& stream) {
+        details::YParser t{[&](auto const& self, Stream& s) -> Parser<RetType>::Result {
+            return parserGen(Parser<RetType>::make([&](Stream& s) -> Parser<RetType>::Result {
+                return self(s);
+            })).apply(s);
+        }};
+
+        using YT = std::decay_t<decltype(t)>;
+        static_assert(std::is_invocable_v<YT, Stream&>);
+        static_assert(IsParserFn<YT, VoidContext>);
+//        static_assert(IsParserFn<details::YParser<Fn, VoidContext>, VoidContext>);
+
+        return t(stream);
+    });
 }
 
 
@@ -1926,15 +2015,15 @@ public:
     using ParserResult = T;
 
     struct LazyContext {
-        explicit LazyContext(P const*const p) : parser(p) {};
-        P const*const parser;
+        explicit LazyContext(void const*const p) : parser(p) {};
+        void const*const parser;
     };
 
     explicit LazyCtxBinding() noexcept = default;
 
     template <ContextType Context>
-    auto operator()(Stream& stream, Context& ctx) const {
-        auto const*const parser = get<LazyContext>(ctx).parser;
+    details::ResultType<ParserResult> operator()(Stream& stream, Context& ctx) const {
+        auto const*const parser = reinterpret_cast<P const*const>(get<LazyContext>(ctx).parser);
         return parser->apply(stream, ctx);
     }
 };
@@ -2720,7 +2809,7 @@ auto lettersFrom(Args ...args) noexcept {
 
 
 template <auto ...args>
-auto lettersFrom() noexcept {
+constexpr auto lettersFrom() noexcept {
     static_assert(sizeof...(args) > 0);
     using T = std::string_view;
     return make_parser([](Stream& str) {
@@ -3054,7 +3143,7 @@ constexpr bool hasFromCharsMethod<Number, std::void_t<decltype(std::from_chars(n
  */
 template <typename Number = double>
     requires (std::is_arithmetic_v<Number>)
-auto number() noexcept {
+constexpr auto number() noexcept {
     return Parser<Number>::make([](Stream& s) {
         auto sv = s.sv();
         Number n{};
@@ -3105,12 +3194,12 @@ auto number() noexcept {
  *
  * @return Parser<char>
  */
-constexpr auto digit() noexcept {
+constexpr inline auto digit() noexcept {
     return charFrom<FromRange('0', '9')>();
 }
 
 
-inline auto digits() noexcept {
+constexpr inline auto digits() noexcept {
     return lettersFrom<FromRange('0', '9')>();
 }
 

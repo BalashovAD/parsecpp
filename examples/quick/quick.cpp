@@ -26,17 +26,23 @@ struct Point {
 
 class Circle {
 public:
-    Circle(Point center, double r) noexcept {
+    Circle(Point center, double r) noexcept
+        : _center(center)
+        , _radius(r) {
 
     }
-    /// ...
+    Point _center;
+    double _radius;
 };
 
 void circle() {
     auto pointParser = between('(', ')',
                liftM(details::MakeClass<Point>{}, number<int>(), charFrom(';') >> number<int>()));
     auto parser = literal("Circle") >> spaces() >>
-            liftM(details::MakeClass<Circle>{}, pointParser, spaces() >> number<double>());
+            liftM(details::MakeClass<Circle>{}, pointParser, spaces() >> number<double>())
+            .cond([](Circle const& c) {
+                return c._radius >= 0;
+            });
 
     Stream example{"Circle (1;-3) 4.5"};
     parser(example).join([](Circle circle) {
@@ -143,11 +149,13 @@ struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
     }
 };
 
-void countSum() noexcept {
-    auto parser = (concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>()) * CountSumRepeat{}).endOfStream();
-    Stream example("(1.5;3)(2;1)(0;3)");
+void sum() noexcept {
+    // Parser<std::tuple<double, double>>
+    auto pairParser = concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>());
+    // Parser<double>
+    auto parser = (pairParser * CountSumRepeat{}).endOfStream();    Stream example("(1.5;3)(2;1)(0;3)");
     parser(example).join([](double sum) {
-        std::cout << "Count sum: " << sum << std::endl;
+        std::cout << "Sum: " << sum << std::endl;
     }, [&example](auto const& error) {
         std::cout << "Error: " << example.generateErrorText(error) << std::endl;
     });
@@ -161,7 +169,7 @@ int main() {
     recursion();
     contextSimple();
     filter();
-    countSum();
+    sum();
 
     return 0;
 }

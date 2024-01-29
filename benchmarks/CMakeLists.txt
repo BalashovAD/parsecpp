@@ -18,10 +18,6 @@ target_include_directories(benchmarks PRIVATE
         ${PARSECPP_INCLUDE_DIR}
         ${BENCHMARK_DIR}/include)
 
-if(${Parsecpp_HugePagesBenchmark})
-    target_link_options(benchmarks PRIVATE "-B/hugetlbfs")
-endif ()
-
 if (Parsecpp_EnableHardBenchmark)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_HARD_BENCHMARK")
 endif()

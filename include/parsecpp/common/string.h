@@ -148,7 +148,7 @@ auto lettersFrom(Args ...args) noexcept {
 
 
 template <auto ...args>
-auto lettersFrom() noexcept {
+constexpr auto lettersFrom() noexcept {
     static_assert(sizeof...(args) > 0);
     using T = std::string_view;
     return make_parser([](Stream& str) {

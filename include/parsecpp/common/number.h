@@ -23,7 +23,7 @@ constexpr bool hasFromCharsMethod<Number, std::void_t<decltype(std::from_chars(n
  */
 template <typename Number = double>
     requires (std::is_arithmetic_v<Number>)
-auto number() noexcept {
+constexpr auto number() noexcept {
     return Parser<Number>::make([](Stream& s) {
         auto sv = s.sv();
         Number n{};
@@ -74,12 +74,12 @@ auto number() noexcept {
  *
  * @return Parser<char>
  */
-constexpr auto digit() noexcept {
+constexpr inline auto digit() noexcept {
     return charFrom<FromRange('0', '9')>();
 }
 
 
-inline auto digits() noexcept {
+constexpr inline auto digits() noexcept {
     return lettersFrom<FromRange('0', '9')>();
 }
 
