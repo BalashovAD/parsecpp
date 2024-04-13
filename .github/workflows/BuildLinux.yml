@@ -22,9 +22,6 @@ jobs:
       with:
         submodules: 'true'
 
-    - name: Debug wc
-      run: wc -l single_include/parsecpp/all.hpp
-
     - name: Run amalgamate
       run: ./amalgamate.sh
 
@@ -34,13 +31,10 @@ jobs:
       env:
         CHANGED_FILES: ${{steps.verify-amalgamate.outputs.changed_files}}
       with:
-        fail-if-changed: false
-        fail-message: "::error:: Single include files were not generated, use amalgamate.sh $CHANGED_FILES"
+        fail-if-changed: true
+        fail-message: "::error:: Single include files were not generated, use amalgamate.sh (.bat)"
         files: |
           single_include/parsecpp/*.hpp
-
-    - name: Debug wc 2
-      run: wc -l single_include/parsecpp/all.hpp
 
     - name: Configure CMake Release
       run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=OFF

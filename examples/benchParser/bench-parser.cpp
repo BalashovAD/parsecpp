@@ -6,6 +6,7 @@
 #include <iostream>
 #include <iomanip>
 #include <numeric>
+#include <cmath>
 
 using namespace prs;
 using namespace std::string_view_literals;
@@ -228,7 +229,7 @@ public:
                     double slowdown = (std::get<BenchInfo>(*cell).cpuTime.count()
                             / std::get<BenchInfo>(*etalonCell).cpuTime.count());
                     if (std::isnan(slowdown)) {
-                        std::cerr << "Nan" << std::endl;
+                        std::cerr << "NaN" << std::endl;
                         return;
                     }
                     info.mult.emplace_back(slowdown);
