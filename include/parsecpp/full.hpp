@@ -1,3 +1,5 @@
+#pragma once
+
 #include <parsecpp/all.hpp>
 
 #include <parsecpp/utils/applyFirstMatch.h>
