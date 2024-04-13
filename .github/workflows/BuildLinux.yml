@@ -22,8 +22,8 @@ jobs:
       with:
         submodules: 'true'
 
-    - name: Debug cp
-      run: cp single_include/parsecpp/all.hpp single_include/parsecpp/all.hpp_old
+    - name: Debug wc
+      run: wc -l single_include/parsecpp/all.hpp
 
     - name: Run amalgamate
       run: ./amalgamate.sh
@@ -39,8 +39,8 @@ jobs:
         files: |
           single_include/parsecpp/*.hpp
 
-    - name: Debug diff
-      run: diff  single_include/parsecpp/all.hpp single_include/parsecpp/all.hpp_old
+    - name: Debug wc 2
+      run: wc -l single_include/parsecpp/all.hpp
 
     - name: Configure CMake Release
       run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=OFF
