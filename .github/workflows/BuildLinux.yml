@@ -26,15 +26,17 @@ jobs:
       run: ./amalgamate.sh
 
     - name: Verify Changed files
-      uses: tj-actions/verify-changed-files@v14
+      uses: tj-actions/verify-changed-files@v19
       id: verify-amalgamate
       with:
         files: |
           single_include/parsecpp/*.hpp
 
     - if: steps.verify-amalgamate.outputs.files_changed == 'true'
+      env:
+        CHANGED_FILES: ${{ steps.verify-amalgamate.outputs.changed_files }}
       run: |
-        echo '::error:: Single include files were not generated, use amalgamate.sh'
+        echo '::error:: Single include files were not generated, use amalgamate.sh ($CHANGED_FILES)'
         exit 1
 
     - name: Configure CMake Release
