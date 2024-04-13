@@ -4,16 +4,26 @@
 
 Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf) ([alt](https://drive.proton.me/urls/7DD4TQHFS8#Ao85HnCqn4OD)).
 
-## Links
-- [Examples](#Examples)
-- [Installation](#Installation)
+- [Design goals](#design-goals)
+- [Examples](#examples)
+- [Installation](#installation)
+- [Idea](#idea)
 - [Build-in operators](#build-in-operators)
 - [Recursion](#recursion)
 - [Advanced](#Advanced)
 - [Category](#category)
 
-## Examples
+## Design goals
+This C++ library, modeled after Haskell's Parsec, is aimed at providing a robust, type-safe parsing framework with a functional-like syntax.
+The key objective is to deliver zero-cost abstractions that maintain the library's performance at a level comparable to hand-optimized code, ensuring it excels in performance-critical applications.
+### Highlights
+- Concepts and compile time checks
+- Header only for straightforward integration
+- Zero abstraction code, no virtual calls
+- No memory allocation
+- No exception style
 
+## Examples
 ### Hello username
 ```c++
 // Parser<std::string_view>
@@ -70,7 +80,7 @@ struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
 // Parser<std::tuple<double, double>>
 auto pairParser = concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>());
 // Parser<double>
-auto parser = (pairParser * CountSumRepeat{}).endOfStream();    Stream example("(1.5;3)(2;1)(0;3)");
+auto parser = (pairParser * CountSumRepeat{}).endOfStream();
 Stream example("(1.5;3)(2;1)(0;3)");
 parser(example).join([](double sum) {
     std::cout << "Sum: " << sum << std::endl;
@@ -83,6 +93,10 @@ All quick examples are located in `examples/quickExamples`.
 
 ## Installation
 
+![Clang-17](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckClang17.yml/badge.svg)
+![Clang-16](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckClang16.yml/badge.svg)
+![GCC-13](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckGCC13.yml/badge.svg)
+
 This header only library requires a **c++20** compiler.  
 You can include the library as a git submodule in your project and add 
 `target_include_directories(prj PRIVATE ${PARSECPP_INCLUDE_DIR})` to your `CMakeLists.txt` file.
@@ -93,12 +107,14 @@ Use `all.hpp` as the base parser header, while `full.hpp` contains some extra op
 There is also a configurable parameter, `Parsecpp_DisableError`, 
 that you can turn on to optimize error string. `-DParsecpp_DisableError=ON` is recommended for release builds.
 
+## Idea
+
 ## TODO List
 - [x] Disable error log by flag
 - [x] Add call stack for debug purpose
 - [x] Add custom context for parsing
 - [ ] Support LL(k) grammatical rules
-- [ ] Non ascii symbols
+- [ ] Non ascii symbols (partial support for now)
 - [ ] Lookahead operators
 - [ ] SIMD
 
@@ -350,6 +366,13 @@ auto lazyCached(Fn const&) noexcept(Fn);
 ### Compare lazy* functions
 
 ```c++
+auto bracesSelfLazy() noexcept {
+    return selfLazy<Unit>([](auto const& self) {
+        return concat(charFrom('(', '{', '['), self >> charFrom(')', '}', ']'))
+                .cond(checkBraces).template repeat<REPEAT_PRE_ALLOC>() >> success();
+    });
+}
+
 Parser<Unit> bracesLazy() noexcept {
     return (concat(charFrom('(', '{', '['), lazy(bracesLazy) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat() >> success()).toCommonType();
@@ -382,19 +405,30 @@ void usingBracesCtx() {
 
 Benchmark results:
 
-| *                          | Success   | Failure   | Speedup   |
-|----------------------------|-----------|-----------|-----------|
-| bracesLazy                 | 4667ns    | 4451ns    | 0.56x     |
-| bracesCached               | 2599ns    | 2447ns    | 1.0x      |
-| bracesCacheConstexpr       | 2692ns    | 2535ns    | 0.97x     |
-| bracesForget               | 2745ns    | 2591ns    | 0.95x     |
-| bracesCtx                  | 2622ns    | 2495ns    | 0.99x     |
-| bracesCtxConstexpr         | 2647ns    | 2523ns    | 0.98x     |
-| -------------------------- | --------- | --------- | --------- |
-| bracesCachedDrop           | 1987ns    | 1904ns    | 1.31x     |
-| bracesCacheDropConstexpr   | 1618ns    | 1501ns    | 1.61x     |
-| bracesCtxDrop              | 1952ns    | 1856ns    | 1.33x     |
-| bracesCtxDropConstexpr     | 1601ns    | 1511ns    | 1.62x     |
+| *                          | BM_bracesSuccess | BM_bracesFailure | Slowdown |
+|----------------------------|------------------|------------------|----------|
+| bracesLazy                 | 13253ns          | 12835ns          | 2.52x    |
+| bracesSelfLazy             | 4708ns           | 4501ns           | 0.888x   |
+| bracesCached               | 5469ns           | 5156ns           | 1.02x    |
+| bracesCacheConstexpr       | 5371ns           | 5000ns           | 1x       |
+| bracesForget               | 5720ns           | 5313ns           | 1.06x    |
+| bracesCtx                  | 5469ns           | 5156ns           | 1.02x    |
+| bracesCtxConstexpr         | 5625ns           | 5441ns           | 1.07x    |
+| -------------------------- | ---------------- | ---------------- | -------- |
+| bracesCachedDrop           | 1074ns           | 942ns            | 1.06x    |
+| bracesCacheDropConstexpr   | 1004ns           | 900ns            | 1x       |
+| bracesCtxDrop              | 1025ns           | 952ns            | 1.04x    |
+| bracesCtxDropConstexpr     | 1147ns           | 1088ns           | 1.18x    |
+
+
+Json benchmarks:
+
+| *          | BM_jsonFile_100k | BM_jsonFile_canada | BM_jsonFile_binance | BM_jsonFile_64kb  | BM_jsonFile_64kb_min | BM_jsonFile_256kb  | BM_jsonFile_256kb_min | BM_jsonFile_5mb  | BM_jsonFile_5mb_min | Slowdown   |
+|------------|------------------|--------------------|---------------------|-------------------|----------------------|--------------------|-----------------------|------------------|---------------------|------------|
+| Lazy       | 2604.17us        | 156.25ms           | 5859.38us           | 1024.93us         | 1000.98us            | 4087.94us          | 3928.07us             | 84.8214ms        | 84.8214ms           | 2.24x      |
+| LazyCached | 1159.67us        | 63.9205ms          | 2455.36us           | 470.948us         | 449.219us            | 1843.16us          | 1727.58us             | 41.9922ms        | 39.5221ms           | 1x         |
+| SelfLazy   | 4087.94us        | 221.354ms          | 9375us              | 1650.8us          | 1650.8us             | 6597.22us          | 6423.61us             | 131.25ms         | 127.604ms           | 3.52x      |
+
 
 ```
 AMD Ryzen 7 5700U, linux gcc 12.3.0 compiler, clang 15.0.7 linker
