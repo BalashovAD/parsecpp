@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <numeric>
 #include <cmath>
+#include <variant>
 
 using namespace prs;
 using namespace std::string_view_literals;
