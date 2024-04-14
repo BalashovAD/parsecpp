@@ -1,4 +1,4 @@
-name: GCC13
+name: gcc13
 
 on:
   workflow_dispatch:  # This event triggers the workflow manually.

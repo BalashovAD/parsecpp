@@ -1,9 +1,10 @@
-name: GCC12
+name: gcc12
 
 on:
   workflow_dispatch:  # This event triggers the workflow manually.
   push:
-
+    branches:
+      - main
 jobs:
   build:
     runs-on: ubuntu-latest

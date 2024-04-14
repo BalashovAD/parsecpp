@@ -7,7 +7,6 @@ Based on the paper [Direct Style Monadic     Parser Combinators For The Real Wor
 - [Design goals](#design-goals)
 - [Examples](#examples)
 - [Installation](#installation)
-- [Idea](#idea)
 - [Build-in operators](#build-in-operators)
 - [Recursion](#recursion)
 - [Advanced](#Advanced)
@@ -96,6 +95,7 @@ All quick examples are located in `examples/quickExamples`.
 ![Clang-17](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckClang17.yml/badge.svg)
 ![Clang-16](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckClang16.yml/badge.svg)
 ![GCC-13](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckGCC13.yml/badge.svg)
+![GCC-12](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckGCC12.yml/badge.svg)
 
 This header only library requires a **c++20** compiler.  
 You can include the library as a git submodule in your project and add 
@@ -106,8 +106,6 @@ Use `all.hpp` as the base parser header, while `full.hpp` contains some extra op
 
 There is also a configurable parameter, `Parsecpp_DisableError`, 
 that you can turn on to optimize error string. `-DParsecpp_DisableError=ON` is recommended for release builds.
-
-## Idea
 
 ## TODO List
 - [x] Disable error log by flag
@@ -401,44 +399,6 @@ void usingBracesCtx() {
     auto ctx = parser.makeCtx(lazyBindingStorage);
     parser(stream, ctx);
 }
-```
-
-Benchmark results:
-
-| *                          | BM_bracesSuccess | BM_bracesFailure | Slowdown |
-|----------------------------|------------------|------------------|----------|
-| bracesLazy                 | 13253ns          | 12835ns          | 2.52x    |
-| bracesSelfLazy             | 4708ns           | 4501ns           | 0.888x   |
-| bracesCached               | 5469ns           | 5156ns           | 1.02x    |
-| bracesCacheConstexpr       | 5371ns           | 5000ns           | 1x       |
-| bracesForget               | 5720ns           | 5313ns           | 1.06x    |
-| bracesCtx                  | 5469ns           | 5156ns           | 1.02x    |
-| bracesCtxConstexpr         | 5625ns           | 5441ns           | 1.07x    |
-| -------------------------- | ---------------- | ---------------- | -------- |
-| bracesCachedDrop           | 1074ns           | 942ns            | 1.06x    |
-| bracesCacheDropConstexpr   | 1004ns           | 900ns            | 1x       |
-| bracesCtxDrop              | 1025ns           | 952ns            | 1.04x    |
-| bracesCtxDropConstexpr     | 1147ns           | 1088ns           | 1.18x    |
-
-
-Json benchmarks:
-
-| *          | BM_jsonFile_100k | BM_jsonFile_canada | BM_jsonFile_binance | BM_jsonFile_64kb  | BM_jsonFile_64kb_min | BM_jsonFile_256kb  | BM_jsonFile_256kb_min | BM_jsonFile_5mb  | BM_jsonFile_5mb_min | Slowdown   |
-|------------|------------------|--------------------|---------------------|-------------------|----------------------|--------------------|-----------------------|------------------|---------------------|------------|
-| Lazy       | 2604.17us        | 156.25ms           | 5859.38us           | 1024.93us         | 1000.98us            | 4087.94us          | 3928.07us             | 84.8214ms        | 84.8214ms           | 2.24x      |
-| LazyCached | 1159.67us        | 63.9205ms          | 2455.36us           | 470.948us         | 449.219us            | 1843.16us          | 1727.58us             | 41.9922ms        | 39.5221ms           | 1x         |
-| SelfLazy   | 4087.94us        | 221.354ms          | 9375us              | 1650.8us          | 1650.8us             | 6597.22us          | 6423.61us             | 131.25ms         | 127.604ms           | 3.52x      |
-
-
-```
-AMD Ryzen 7 5700U, linux gcc 12.3.0 compiler, clang 15.0.7 linker
-100 repetitions, median value, no-drop cv < 1.7%, drop cv < 0.7%
-Run on (16 X 4369.92 MHz CPU s)
-CPU Caches:
-  L1 Data 32 KiB (x8)
-  L1 Instruction 32 KiB (x8)
-  L2 Unified 512 KiB (x8)
-  L3 Unified 4096 KiB (x2)
 ```
 
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.
