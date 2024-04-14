@@ -6,6 +6,8 @@
 #include <iostream>
 #include <iomanip>
 #include <numeric>
+#include <cmath>
+#include <variant>
 
 using namespace prs;
 using namespace std::string_view_literals;
@@ -75,6 +77,9 @@ struct BenchInfo {
         }
     };
 
+    auto print() const {
+        return TimePrinter{cpuTime};
+    }
 
     friend std::ostream& operator<<(std::ostream& os, BenchInfo const& info) noexcept {
         os << info.globalName << "/" << info.subName << "-" << info.cpuTime.count() << " " << info.iterations;
@@ -91,6 +96,43 @@ BenchDuration durationFromString(double t, std::string_view period) noexcept {
 
     return BenchDuration(t * strToPeriod.apply(period));
 }
+
+struct MultInfo {
+    MultInfo() = default;
+    explicit MultInfo(double v) : mult({v}) {};
+
+    std::vector<double> mult;
+
+    struct Printer {
+        friend std::ostream& operator<<(std::ostream& os, Printer const& printer) noexcept {
+            std::stringstream strStream;
+            strStream << std::setprecision(3);
+            if (printer.vals.empty()) {
+                strStream << "-";
+            } else {
+                double val = std::accumulate(printer.vals.begin(), printer.vals.end(), .0) / printer.vals.size();
+                strStream << val << "x";
+//                strStream << "(";
+//                for (auto const& v : printer.vals) {
+//                    strStream << v << " + ";
+//                }
+//                strStream << ")";
+            }
+            return os << strStream.str();
+        }
+
+        std::vector<double> vals;
+    };
+
+    auto print() const {
+        return Printer{mult};
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, MultInfo const& info) noexcept {
+        os << "Mult:" << info.mult.size();
+        return os;
+    }
+};
 
 // Parser<BenchDuration>
 auto durationParser() noexcept {
@@ -144,6 +186,8 @@ class RowStorage {
 public:
     RowStorage() noexcept = default;
 
+    static inline std::string SLOWDOWN = "Slowdown";
+
     void store(std::string const& rowName, BenchInfo const& info) noexcept {
         if (auto maybeSuffix = info.getSuffix(rowName); maybeSuffix) {
             m_rowNames.registerName(rowName);
@@ -151,8 +195,49 @@ public:
             auto key = std::make_pair(rowName, *maybeSuffix);
             auto wasAdded = m_table.emplace(key, info).second;
             if (!wasAdded) {
-                std::cerr << "Duplicate: " << info << " old: " << m_table.at(key) << std::endl;
+                std::cerr << "Duplicate: " << info << std::endl;
             }
+        }
+    }
+
+    void store(std::string const& rowName, std::string const& colName, MultInfo mult) noexcept {
+        m_rowNames.registerName(rowName);
+        m_columnNames.registerName(colName);
+        auto key = std::make_pair(rowName, colName);
+        auto wasAdded = m_table.emplace(key, mult).second;
+        if (!wasAdded) {
+            std::cerr << "Duplicate(Mult): " << rowName << "/" << colName << std::endl;
+        }
+    }
+
+    void setEtalon(std::string const& etalonName) noexcept {
+        if (!m_columnNames.hasName(etalonName)) {
+            std::cerr << "No etalon row name: " << etalonName << std::endl;
+            return;
+        }
+        store(SLOWDOWN, etalonName, MultInfo{1.});
+        for (auto const& col : m_columnNames.getList()) {
+            if (col == etalonName) {
+                continue;
+            }
+            MultInfo info;
+            for (auto const& row : m_rowNames.getList()) {
+                auto etalonCell = getCell(row, etalonName);
+                auto cell = getCell(row, col);
+                if (etalonCell && cell
+                        && std::holds_alternative<BenchInfo>(*etalonCell)
+                        && std::holds_alternative<BenchInfo>(*cell)) {
+                    double slowdown = (std::get<BenchInfo>(*cell).cpuTime.count()
+                            / std::get<BenchInfo>(*etalonCell).cpuTime.count());
+                    if (std::isnan(slowdown)) {
+                        std::cerr << "NaN" << std::endl;
+                        return;
+                    }
+                    info.mult.emplace_back(slowdown);
+                }
+            }
+
+            store(SLOWDOWN, col, info);
         }
     }
 
@@ -185,13 +270,11 @@ public:
             os << "| " << std::setw(widths[0] - 1) << trim(rowName, "/_");
             for (auto i = 0; i != columns->size(); ++i) {
                 auto const& columnName = columns->operator[](i);
-                auto key = std::make_pair(rowName, columnName);
-                if (transpose) {
-                    key = std::make_pair(columnName, rowName);
-                }
                 os << "| " << std::setw(widths[i + 1] - 1);
-                if (auto it = m_table.find(key); it != m_table.end()) {
-                    os << BenchInfo::TimePrinter{it->second.cpuTime};
+                if (auto it = getCell(rowName, columnName, transpose); it) {
+                    std::visit([&](auto const& t) {
+                        os << t.print();
+                    }, *it);
                 } else {
                     os << "-";
                 }
@@ -201,6 +284,7 @@ public:
         return os.str();
     }
 private:
+
     std::vector<int> countWidths(bool transpose) const noexcept {
         auto const* rows = &m_rowNames.getList();
         auto const* columns = &m_columnNames.getList();
@@ -222,7 +306,20 @@ private:
         return widths;
     }
 
-    using Cell = BenchInfo;
+    using Cell = std::variant<BenchInfo, MultInfo>;
+
+    std::optional<Cell> getCell(std::string const& r, std::string const& c, bool transpose = false) const noexcept {
+        auto key = std::make_pair(r, c);
+        if (transpose) {
+            key = std::make_pair(c, r);
+        }
+        if (m_table.contains(key)) {
+            return m_table.at(key);
+        } else {
+            return std::nullopt;
+        }
+    }
+
 
     class OrderedNames {
     public:
@@ -230,6 +327,10 @@ private:
             if (m_names.emplace(name).second) {
                 m_order.emplace_back(name);
             }
+        }
+
+        bool hasName(std::string const& name) {
+            return m_names.contains(name);
         }
 
         std::vector<std::string> const& getList() const noexcept {
@@ -248,6 +349,7 @@ private:
 int main(int argc, char* argv[]) {
     bool const agg = hasArgumentKey(argc, argv, "--agg");
     auto rows = getArgumentsAfterKey(argc, argv, "--row");
+    auto slowdown = getArgumentsAfterKey(argc, argv, "--slowdown");
     bool const transpose = hasArgumentKey(argc, argv, "--transpose");
 
     auto parser = infoParser(agg);
@@ -264,6 +366,10 @@ int main(int argc, char* argv[]) {
         for (auto const& info : benches) {
             storage.store(row, info);
         }
+    }
+
+    if (slowdown.size() == 1) {
+        storage.setEtalon(slowdown[0]);
     }
 
     std::cout << storage.print(transpose) << std::endl;

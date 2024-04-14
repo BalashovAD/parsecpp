@@ -2250,7 +2250,7 @@ constexpr auto satisfy(Fn&& tTest) noexcept {
 // #include <parsecpp/core/modifier.h>
 
 
-// #include "parser.h"
+// #include <parsecpp/core/parser.h>
 
 
 namespace prs {
@@ -3767,7 +3767,7 @@ auto makeTMemoizer(Fn fn) {
 
 // #include <parsecpp/core/parser.h>
 
-// #include "parsecpp/core/modifier.h"
+// #include <parsecpp/core/modifier.h>
 
 // #include <parsecpp/utils/cmp.h>
 
