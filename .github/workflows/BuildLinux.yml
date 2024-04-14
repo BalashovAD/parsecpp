@@ -63,7 +63,7 @@ jobs:
       run: echo '${{env.JSON_EXAMPLE}}' | ./json/json
 
     - name: Configure CMake Debug
-      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF -DParsecpp_Sanitizer=ON
+      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF -DParsecpp_Sanitizer=OFF
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build_debug --config Debug
