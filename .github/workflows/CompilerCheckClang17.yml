@@ -3,8 +3,7 @@ name: Clang17
 on:
   workflow_dispatch:  # This event triggers the workflow manually.
   push:
-    branches:
-      - main
+
 
 jobs:
   build:
