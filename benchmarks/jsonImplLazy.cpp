@@ -189,7 +189,7 @@ inline auto parseObject(auto const& anyParser) noexcept {
     auto parserPost = charFromSpaces('}');
     return (parserPre >>
                       (toMap(parserKey, anyParser, parserDelim) >>= Make{})
-                      << parserPost).toCommonType();
+                      << parserPost);
 }
 
 
@@ -199,17 +199,22 @@ inline auto parseArray(auto const& anyParser) noexcept {
     auto parserPost = charFromSpaces(']');
     return (parserPre >>
                       (anyParser.template repeat<10>(parserDelim) >>= Make{})
-                      << parserPost).toCommonType();
+                      << parserPost);
 }
+
+static inline auto parseBoolV = parseBool();
+static inline auto parseUndefinedV = parseUndefined();
+static inline auto parseDoubleV = parseDouble();
+static inline auto parseStringV = parseString();
 
 inline auto parseAny() noexcept {
     return selfLazy<Json::ptr>([](auto const& p) {
         return parseObject(p)
                | parseArray(p)
-               | parseString()
-               | parseDouble()
-               | parseUndefined()
-               | parseBool();
+               | parseStringV
+               | parseDoubleV
+               | parseUndefinedV
+               | parseBoolV;
     });
 }
 
