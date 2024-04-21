@@ -77,7 +77,7 @@ struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
 };
 
 // Parser<std::tuple<double, double>>
-auto pairParser = concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>());
+auto pairParser = concat(charFrom('(') >> number(), charFrom(';') >> number() << charFrom(')'));
 // Parser<double>
 auto parser = (pairParser * CountSumRepeat{}).endOfStream();
 Stream example("(1.5;3)(2;1)(0;3)");
