@@ -1,6 +1,6 @@
 #pragma once
 
-#include "parser.h"
+#include <parsecpp/core/parser.h>
 
 namespace prs {
 

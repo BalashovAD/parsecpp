@@ -19,7 +19,7 @@ if(${CCACHE_FOUND})
 endif()
 
 
-if (Parsecpp_AnnotateAssembler)
+if (${Parsecpp_AnnotateAssembler})
     message("Use -g3 to annotate assembler")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3")
 endif ()

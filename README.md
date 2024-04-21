@@ -4,16 +4,25 @@
 
 Based on the paper [Direct Style Monadic     Parser Combinators For The Real World](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/parsec-paper-letter.pdf) ([alt](https://drive.proton.me/urls/7DD4TQHFS8#Ao85HnCqn4OD)).
 
-## Links
-- [Examples](#Examples)
-- [Installation](#Installation)
+- [Design goals](#design-goals)
+- [Examples](#examples)
+- [Installation](#installation)
 - [Build-in operators](#build-in-operators)
 - [Recursion](#recursion)
 - [Advanced](#Advanced)
 - [Category](#category)
 
-## Examples
+## Design goals
+This C++ library, modeled after Haskell's Parsec, is aimed at providing a robust, type-safe parsing framework with a functional-like syntax.
+The key objective is to deliver zero-cost abstractions that maintain the library's performance at a level comparable to hand-optimized code, ensuring it excels in performance-critical applications.
+### Highlights
+- Concepts and compile time checks
+- Header only for straightforward integration
+- Zero abstraction code, no virtual calls
+- No memory allocation
+- No exception style
 
+## Examples
 ### Hello username
 ```c++
 // Parser<std::string_view>
@@ -68,9 +77,9 @@ struct CountSumRepeat : public Repeat<CountSumRepeat, double, VoidContext> {
 };
 
 // Parser<std::tuple<double, double>>
-auto pairParser = concat(charFrom<'('>() >> number(), charFrom<';'>() >> number() << charFrom<')'>());
+auto pairParser = concat(charFrom('(') >> number(), charFrom(';') >> number() << charFrom(')'));
 // Parser<double>
-auto parser = (pairParser * CountSumRepeat{}).endOfStream();    Stream example("(1.5;3)(2;1)(0;3)");
+auto parser = (pairParser * CountSumRepeat{}).endOfStream();
 Stream example("(1.5;3)(2;1)(0;3)");
 parser(example).join([](double sum) {
     std::cout << "Sum: " << sum << std::endl;
@@ -82,6 +91,11 @@ parser(example).join([](double sum) {
 All quick examples are located in `examples/quickExamples`.
 
 ## Installation
+
+![Clang-17](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckClang17.yml/badge.svg)
+![Clang-16](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckClang16.yml/badge.svg)
+![GCC-13](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckGCC13.yml/badge.svg)
+![GCC-12](https://github.com/balashovAD/parsecpp/actions/workflows/CompilerCheckGCC12.yml/badge.svg)
 
 This header only library requires a **c++20** compiler.  
 You can include the library as a git submodule in your project and add 
@@ -98,7 +112,7 @@ that you can turn on to optimize error string. `-DParsecpp_DisableError=ON` is r
 - [x] Add call stack for debug purpose
 - [x] Add custom context for parsing
 - [ ] Support LL(k) grammatical rules
-- [ ] Non ascii symbols
+- [ ] Non ascii symbols (partial support for now)
 - [ ] Lookahead operators
 - [ ] SIMD
 
@@ -350,6 +364,13 @@ auto lazyCached(Fn const&) noexcept(Fn);
 ### Compare lazy* functions
 
 ```c++
+auto bracesSelfLazy() noexcept {
+    return selfLazy<Unit>([](auto const& self) {
+        return concat(charFrom('(', '{', '['), self >> charFrom(')', '}', ']'))
+                .cond(checkBraces).template repeat<REPEAT_PRE_ALLOC>() >> success();
+    });
+}
+
 Parser<Unit> bracesLazy() noexcept {
     return (concat(charFrom('(', '{', '['), lazy(bracesLazy) >> charFrom(')', '}', ']'))
         .cond(checkBraces).repeat() >> success()).toCommonType();
@@ -378,33 +399,6 @@ void usingBracesCtx() {
     auto ctx = parser.makeCtx(lazyBindingStorage);
     parser(stream, ctx);
 }
-```
-
-Benchmark results:
-
-| *                          | Success   | Failure   | Speedup   |
-|----------------------------|-----------|-----------|-----------|
-| bracesLazy                 | 4667ns    | 4451ns    | 0.56x     |
-| bracesCached               | 2599ns    | 2447ns    | 1.0x      |
-| bracesCacheConstexpr       | 2692ns    | 2535ns    | 0.97x     |
-| bracesForget               | 2745ns    | 2591ns    | 0.95x     |
-| bracesCtx                  | 2622ns    | 2495ns    | 0.99x     |
-| bracesCtxConstexpr         | 2647ns    | 2523ns    | 0.98x     |
-| -------------------------- | --------- | --------- | --------- |
-| bracesCachedDrop           | 1987ns    | 1904ns    | 1.31x     |
-| bracesCacheDropConstexpr   | 1618ns    | 1501ns    | 1.61x     |
-| bracesCtxDrop              | 1952ns    | 1856ns    | 1.33x     |
-| bracesCtxDropConstexpr     | 1601ns    | 1511ns    | 1.62x     |
-
-```
-AMD Ryzen 7 5700U, linux gcc 12.3.0 compiler, clang 15.0.7 linker
-100 repetitions, median value, no-drop cv < 1.7%, drop cv < 0.7%
-Run on (16 X 4369.92 MHz CPU s)
-CPU Caches:
-  L1 Data 32 KiB (x8)
-  L1 Instruction 32 KiB (x8)
-  L2 Unified 512 KiB (x8)
-  L3 Unified 4096 KiB (x2)
 ```
 
 See `examples/calc`, `examples/json`, `benchmark/lazyBenchmark.cpp`, and unit tests `tests/` for more complex examples with recursion.

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <parsecpp/core/parser.h>
-#include "parsecpp/core/modifier.h"
+#include <parsecpp/core/modifier.h>
 #include <parsecpp/utils/cmp.h>
 
 namespace prs::debug {

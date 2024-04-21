@@ -63,7 +63,7 @@ inline auto generateChallengeSamplesWithWeights(size_t sampleSize) noexcept {
             currentSum += samples[j].second;
             ++j;
         }
-        assert(j >= sampleSize);
+        assert(j < sampleSize);
         out[i] = (samples[j].first);
     }
 

@@ -16,7 +16,7 @@ add_executable(unit-tests ${TEST_SOURCE_LIST} ${HEADER_LIST} common/numberTest.c
 
 target_link_libraries(unit-tests PRIVATE ${TEST_LIBRARIES})
 
-if (CODE_COVERAGE)
+if (${CODE_COVERAGE})
         target_code_coverage(unit-tests EXCLUDE .*Test.cpp testHelper.h unit.cpp sourceLocation.h)
         target_compile_options(unit-tests PRIVATE -g -O0 --coverage -fprofile-arcs -ftest-coverage)
 endif ()

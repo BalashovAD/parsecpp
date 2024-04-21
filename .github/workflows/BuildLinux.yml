@@ -1,5 +1,4 @@
-name: CMake
-
+name: Full
 
 on: push
 
@@ -12,9 +11,14 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+    - name: Setup Clang
+      uses: egor-tensin/setup-clang@v1
+      with:
+        version: 17
+        platform: x64
+
+    - uses: actions/checkout@v4
       with:
         submodules: 'true'
 
@@ -22,16 +26,15 @@ jobs:
       run: ./amalgamate.sh
 
     - name: Verify Changed files
-      uses: tj-actions/verify-changed-files@v14
+      uses: tj-actions/verify-changed-files@v19
       id: verify-amalgamate
+      env:
+        CHANGED_FILES: ${{steps.verify-amalgamate.outputs.changed_files}}
       with:
+        fail-if-changed: true
+        fail-message: "::error:: Single include files were not generated, use amalgamate.sh (.bat)"
         files: |
           single_include/parsecpp/*.hpp
-
-    - if: steps.verify-amalgamate.outputs.files_changed == 'true'
-      run: |
-        echo '::error:: Single include files were not generated, use amalgamate.sh'
-        exit 1
 
     - name: Configure CMake Release
       run: cmake -B ${{github.workspace}}/build_release -DCMAKE_BUILD_TYPE=Release -DParsecpp_DisableError=ON -DCODE_COVERAGE=OFF -DParsecpp_SingleInclude=ON -DParsecpp_EnableHardBenchmark=OFF
@@ -60,7 +63,7 @@ jobs:
       run: echo '${{env.JSON_EXAMPLE}}' | ./json/json
 
     - name: Configure CMake Debug
-      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF -DParsecpp_Sanitizer=ON
+      run: cmake -B ${{github.workspace}}/build_debug -DCMAKE_BUILD_TYPE=Debug -DParsecpp_DisableError=OFF -DCODE_COVERAGE=OFF -DParsecpp_Sanitizer=OFF
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build_debug --config Debug

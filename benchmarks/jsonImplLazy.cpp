@@ -2,10 +2,6 @@
 
 #include <variant>
 
-namespace implLazy {
-
-using namespace prs;
-
 class Json {
 public:
     struct Null{};
@@ -83,12 +79,10 @@ private:
     Variant m_value;
 };
 
+using namespace prs;
+
 using PJ = Parser<Json::ptr>;
 using Make = details::MakeShared<Json>;
-
-PJ parseObject() noexcept;
-PJ parseArray() noexcept;
-
 
 inline auto parseString() noexcept {
     return between('"') >>= Make{};
@@ -105,11 +99,16 @@ inline auto parseUndefined() noexcept {
 inline auto parseBool() noexcept {
     return (spaces() >> (literal("false") >> pure(false)) | (literal("true") >> pure(true))) >>= Make{};
 }
-struct ObjectTag;
-struct ArrayTag;
+
+
+namespace implLazy {
+
+PJ parseObject() noexcept;
+PJ parseArray() noexcept;
+
 inline auto parseAny() noexcept {
-    return lazyCached<ObjectTag>(parseObject)
-           | lazyCached<ArrayTag>(parseArray)
+    return lazy(parseObject)
+           | lazy(parseArray)
            | parseString()
            | parseDouble()
            | parseUndefined()
@@ -134,6 +133,89 @@ inline PJ parseArray() noexcept {
     return (parserPre >>
                       (parseAny().repeat<10>(parserDelim) >>= Make{})
                       << parserPost).toCommonType();
+}
+
+}
+
+
+namespace implLazyCached {
+
+PJ parseObject() noexcept;
+PJ parseArray() noexcept;
+
+struct ObjectTag;
+struct ArrayTag;
+
+inline auto parseAny() noexcept {
+    return lazyCached<ObjectTag>(parseObject)
+           | lazyCached<ArrayTag>(parseArray)
+           | parseString()
+           | parseDouble()
+           | parseUndefined()
+           | parseBool();
+}
+
+
+inline PJ parseObject() noexcept {
+    auto parserPre = charFromSpaces('{');
+    auto parserKey = spaces() >> between('"') << charFromSpaces(':');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces('}');
+    return (parserPre >>
+                      (toMap(parserKey, parseAny(), parserDelim) >>= Make{})
+                      << parserPost).toCommonType();
+}
+
+
+inline PJ parseArray() noexcept {
+    auto parserPre = charFromSpaces('[');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces(']');
+    return (parserPre >>
+                      (parseAny().repeat<10>(parserDelim) >>= Make{})
+                      << parserPost).toCommonType();
+}
+
+}
+
+
+namespace implSelfLazy {
+
+
+inline auto parseObject(auto const& anyParser) noexcept {
+    auto parserPre = charFromSpaces('{');
+    auto parserKey = spaces() >> between('"') << charFromSpaces(':');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces('}');
+    return (parserPre >>
+                      (toMap(parserKey, anyParser, parserDelim) >>= Make{})
+                      << parserPost);
+}
+
+
+inline auto parseArray(auto const& anyParser) noexcept {
+    auto parserPre = charFromSpaces('[');
+    auto parserDelim = charFromSpaces(',');
+    auto parserPost = charFromSpaces(']');
+    return (parserPre >>
+                      (anyParser.template repeat<10>(parserDelim) >>= Make{})
+                      << parserPost);
+}
+
+static inline auto parseBoolV = parseBool();
+static inline auto parseUndefinedV = parseUndefined();
+static inline auto parseDoubleV = parseDouble();
+static inline auto parseStringV = parseString();
+
+inline auto parseAny() noexcept {
+    return selfLazy<Json::ptr>([](auto const& p) {
+        return parseObject(p)
+               | parseArray(p)
+               | parseStringV
+               | parseDoubleV
+               | parseUndefinedV
+               | parseBoolV;
+    });
 }
 
 }
